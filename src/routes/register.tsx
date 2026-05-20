@@ -2,6 +2,27 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Shell } from "../components/crpg/Shell";
+import { createServerFn } from "@tanstack/react-start"; // ✅ 確保來自 react-start
+
+// 🌟 【修正版後端魔法】直接傳入 async 函數，無需 .validator 拼接
+const registerServerFn = createServerFn(async (data: { user: string; pass: string }) => {
+  const { prisma } = await import("../lib/db");
+  const { user, pass } = data;
+  
+  const existing = await prisma.user.findUnique({ where: { username: user } });
+  if (existing) {
+    return { error: `帳號 '${user}' 已被註冊` };
+  }
+
+  await prisma.user.create({
+    data: {
+      username: user,
+      password_hash: pass,
+    },
+  });
+
+  return { success: true };
+});
 
 export const Route = createFileRoute("/register")({
   component: Register,
@@ -18,23 +39,35 @@ function Register() {
   const [out, setOut] = useState([]);
   const navigate = useNavigate();
 
-  function submit(e) {
+  async function submit(e) {
     e.preventDefault();
     const u = user.trim();
+    
     if (!u) return setOut(["[!!] 帳號不可為空"]);
     if (pass.length < 4) return setOut(["[!!] 密碼至少 4 個字元"]);
     if (pass !== pass2) return setOut(["[!!] 兩次密碼不一致"]);
-    let users = {};
-    try { users = JSON.parse(localStorage.getItem("cloud-rpg-users") || "{}"); } catch {}
-    if (users[u]) return setOut([`[!!] 帳號 '${u}' 已被註冊`]);
-    users[u] = pass;
-    try { localStorage.setItem("cloud-rpg-users", JSON.stringify(users)); } catch {}
-    setOut([
-      "[ ok ] 操作員檔案已建立",
-      `[ ok ] 帳號：${u}`,
-      "[ .. ] 1.5 秒後跳轉登入頁面…",
-    ]);
-    setTimeout(() => navigate({ to: "/login" }), 1500);
+    
+    setOut(["[ .. ] Establishing secure uplink to AWS Database..."]);
+
+    try {
+      // ✅ 直接將物件傳入後端函數
+      const res = await registerServerFn({ user: u, pass });
+      
+      if (res.error) {
+        return setOut([`[!!] ${res.error}`]);
+      }
+
+      setOut([
+        "[ ok ] Uplink established.",
+        "[ ok ] 操作員檔案已同步至雲端核心",
+        `[ ok ] 帳號：${u}`,
+        "[ .. ] 1.5 秒後跳轉登入頁面…",
+      ]);
+      setTimeout(() => navigate({ to: "/login" }), 1500);
+
+    } catch (error) {
+      setOut(["[!!] 無法連線至伺服器核心，請稍後再試"]);
+    }
   }
 
   return (
@@ -56,7 +89,7 @@ function Register() {
             <pre className="mt-4 text-xs text-[#7be0a8] leading-5">{out.join("\n")}</pre>
           )}
           <div className="mt-6 text-[10px] text-[#3a8c5e]">
-            帳號儲存於本機（localStorage · cloud-rpg-users）。註冊完成後請至登入頁面 jack in。
+            帳號將安全加密並儲存於雲端資料庫。註冊完成後請至登入頁面 jack in。
           </div>
         </div>
       </div>

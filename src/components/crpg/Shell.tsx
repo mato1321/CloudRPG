@@ -3,14 +3,14 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 
 const NAV = [
-  { to: "/",          label: "LOBBY"  },
+  { to: "/",      label: "LOBBY"  },
   { to: "/play",      label: "PLAY"   },
   { to: "/market",    label: "MARKET" },
   { to: "/guild",     label: "GUILD"  },
   { to: "/codex",     label: "CODEX"  },
 ];
 
-const PUBLIC_PATHS = new Set(["/", "/login"]);
+const PUBLIC_PATHS = new Set(["/", "/login", "/register"]);
 export const AUTH_KEY = "cloud-rpg-auth";
 export function readAuth() {
   if (typeof window === "undefined") return null;
@@ -74,7 +74,8 @@ export function TopBar({ extra = null }) {
       <div className="ml-auto flex items-center gap-4">
         {extra}
         <Stat label="PING" value={`${ping}ms`} color={ping < 40 ? "text-[#00ff88] crpg-glow" : "text-[#ffd60a] crpg-glow-yellow"} />
-        <Stat label="TIME" value={now.toTimeString().slice(0,8)} />
+        {/* 加上 suppressHydrationWarning 防止伺服器與客戶端時間不一致報錯 */}
+        <Stat label="TIME" value={now.toTimeString().slice(0,8)} suppressHydrationWarning={true} />
         {auth ? (
           <div className="flex items-center gap-2">
             <span className="text-[#3a8c5e]">USER</span>
@@ -92,29 +93,48 @@ export function TopBar({ extra = null }) {
   );
 }
 
-export function Stat({ label, value, color = "text-[#00ff88] crpg-glow" }) {
+export function Stat({ label, value, color = "text-[#00ff88] crpg-glow", suppressHydrationWarning = false }) {
   return (
     <div className="flex items-center gap-1">
       <span className="text-[#3a8c5e]">{label}</span>
       <span className="text-[#0f3a26]">:</span>
-      <span className={color}>{value}</span>
+      <span className={color} suppressHydrationWarning={suppressHydrationWarning}>{value}</span>
     </div>
   );
 }
 
 export function Particles({ count = 24 }) {
-  const particles = useMemo(
-    () => Array.from({ length: count }, () => ({
-      left: Math.random()*100, delay: Math.random()*12,
-      duration: 10+Math.random()*14, size: 1+Math.random()*2,
-    })), [count],
-  );
+  // 🌟 加入 mounted 狀態防護罩
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const particles = useMemo(() => {
+    // 如果還沒 mounted（伺服器端渲染中），先不產生亂數
+    if (!mounted) return [];
+    return Array.from({ length: count }, () => ({
+      left: Math.random()*100, 
+      delay: Math.random()*12,
+      duration: 10+Math.random()*14, 
+      size: 1+Math.random()*2,
+    }));
+  }, [count, mounted]);
+
+  // 伺服器端先回傳空的容器，避免報錯
+  if (!mounted) {
+    return <div className="crpg-particles"></div>;
+  }
+
+  // 瀏覽器端接手後，正式渲染粒子
   return (
     <div className="crpg-particles">
       {particles.map((p, i) => (
         <span key={i} className="crpg-particle"
+          suppressHydrationWarning={true}
           style={{ left: `${p.left}%`, bottom: `-10px`, width: p.size, height: p.size,
-                   animationDelay: `${p.delay}s`, animationDuration: `${p.duration}s` }} />
+                  animationDelay: `${p.delay}s`, animationDuration: `${p.duration}s` }} />
       ))}
     </div>
   );
