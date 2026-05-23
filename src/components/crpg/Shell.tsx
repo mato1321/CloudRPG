@@ -3,15 +3,14 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 
 const NAV = [
-  { to: "/",      label: "LOBBY"  },
+  { to: "/",          label: "LOBBY"  },
   { to: "/play",      label: "PLAY"   },
   { to: "/market",    label: "MARKET" },
   { to: "/guild",     label: "GUILD"  },
   { to: "/codex",     label: "CODEX"  },
 ];
 
-// 🌟 解除了 /register 的封印
-const PUBLIC_PATHS = new Set(["/", "/login", "/register"]);
+const PUBLIC_PATHS = new Set(["/", "/login"]);
 export const AUTH_KEY = "cloud-rpg-auth";
 export function readAuth() {
   if (typeof window === "undefined") return null;
@@ -35,14 +34,9 @@ function usePing() {
 export function TopBar({ extra = null }) {
   const now = useNow();
   const ping = usePing();
-  
-  // 🌟 修復 418 錯誤：初始狀態設為 null，假裝未登入，讓伺服器與客戶端第一眼畫面一致
-  const [auth, setAuth] = useState(null);
+  const [auth, setAuth] = useState(() => readAuth());
   const navigate = useNavigate();
-
   useEffect(() => {
-    // 🌟 網頁載入後，才真實讀取使用者的登入狀態
-    setAuth(readAuth());
     const sync = () => setAuth(readAuth());
     window.addEventListener("storage", sync);
     window.addEventListener("cloud-rpg-auth-change", sync);
@@ -51,13 +45,11 @@ export function TopBar({ extra = null }) {
       window.removeEventListener("cloud-rpg-auth-change", sync);
     };
   }, []);
-
   function logout() {
     clearAuth();
     window.dispatchEvent(new Event("cloud-rpg-auth-change"));
     navigate({ to: "/login" });
   }
-
   return (
     <header className="crpg-panel relative z-10 flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2 text-xs">
       <Link to="/" className="flex items-center gap-2 mr-2">
@@ -82,7 +74,7 @@ export function TopBar({ extra = null }) {
       <div className="ml-auto flex items-center gap-4">
         {extra}
         <Stat label="PING" value={`${ping}ms`} color={ping < 40 ? "text-[#00ff88] crpg-glow" : "text-[#ffd60a] crpg-glow-yellow"} />
-        <Stat label="TIME" value={now.toTimeString().slice(0,8)} suppressHydrationWarning={true} />
+        <Stat label="TIME" value={now.toTimeString().slice(0,8)} />
         {auth ? (
           <div className="flex items-center gap-2">
             <span className="text-[#3a8c5e]">USER</span>
@@ -100,42 +92,27 @@ export function TopBar({ extra = null }) {
   );
 }
 
-export function Stat({ label, value, color = "text-[#00ff88] crpg-glow", suppressHydrationWarning = false }) {
+export function Stat({ label, value, color = "text-[#00ff88] crpg-glow" }) {
   return (
     <div className="flex items-center gap-1">
       <span className="text-[#3a8c5e]">{label}</span>
       <span className="text-[#0f3a26]">:</span>
-      <span className={color} suppressHydrationWarning={suppressHydrationWarning}>{value}</span>
+      <span className={color}>{value}</span>
     </div>
   );
 }
 
 export function Particles({ count = 24 }) {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  const particles = useMemo(() => {
-    if (!mounted) return [];
-    return Array.from({ length: count }, () => ({
-      left: Math.random()*100, 
-      delay: Math.random()*12,
-      duration: 10+Math.random()*14, 
-      size: 1+Math.random()*2,
-    }));
-  }, [count, mounted]);
-
-  if (!mounted) {
-    return <div className="crpg-particles"></div>;
-  }
-
+  const particles = useMemo(
+    () => Array.from({ length: count }, () => ({
+      left: Math.random()*100, delay: Math.random()*12,
+      duration: 10+Math.random()*14, size: 1+Math.random()*2,
+    })), [count],
+  );
   return (
     <div className="crpg-particles">
       {particles.map((p, i) => (
         <span key={i} className="crpg-particle"
-          suppressHydrationWarning={true}
           style={{ left: `${p.left}%`, bottom: `-10px`, width: p.size, height: p.size,
                    animationDelay: `${p.delay}s`, animationDuration: `${p.duration}s` }} />
       ))}
@@ -146,14 +123,8 @@ export function Particles({ count = 24 }) {
 export function Shell({ children, headerExtra = null }) {
   const location = useLocation();
   const navigate = useNavigate();
-  
-  // 🌟 修復 418 錯誤：確保伺服器渲染時，authed 初始為 false，不會錯誤渲染登入後的畫面
-  const [authed, setAuthed] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
+  const [authed, setAuthed] = useState(() => !!readAuth());
   useEffect(() => {
-    setMounted(true);
-    setAuthed(!!readAuth());
     const sync = () => setAuthed(!!readAuth());
     window.addEventListener("storage", sync);
     window.addEventListener("cloud-rpg-auth-change", sync);
@@ -163,22 +134,18 @@ export function Shell({ children, headerExtra = null }) {
       window.removeEventListener("cloud-rpg-auth-change", sync);
     };
   }, []);
-
   useEffect(() => {
-    if (mounted && !authed && !PUBLIC_PATHS.has(location.pathname)) {
+    if (!authed && !PUBLIC_PATHS.has(location.pathname)) {
       navigate({ to: "/login" });
     }
-  }, [mounted, authed, location.pathname, navigate]);
-
+  }, [authed, location.pathname, navigate]);
   return (
     <main className="crpg-root crpg-scanlines">
       <div className="crpg-grid-bg" />
       <Particles />
       <div className="relative z-10 flex flex-col gap-3 p-3 h-screen overflow-hidden">
         <TopBar extra={headerExtra} />
-        
-        {/* 🌟 在 mounted 之前先不渲染可能產生衝突的內容，等瀏覽器準備好再顯示 */}
-        {!mounted ? null : (!authed && !PUBLIC_PATHS.has(location.pathname)) ? (
+        {(!authed && !PUBLIC_PATHS.has(location.pathname)) ? (
           <div className="crpg-panel flex-1 flex flex-col items-center justify-center text-center p-8">
             <div className="text-[#ff4d6d] crpg-glow-red text-sm tracking-widest mb-3">[ ACCESS DENIED ]</div>
             <div className="text-[#7be0a8] text-sm mb-4">未登入終端機。請先取得通行金鑰以存取雲端網格。</div>

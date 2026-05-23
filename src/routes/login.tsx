@@ -2,25 +2,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Shell, AUTH_KEY } from "../components/crpg/Shell";
-import { createServerFn } from "@tanstack/react-start"; // ✅ 確保來自 react-start
-
-// 🌟 【修正版後端魔法】
-const loginServerFn = createServerFn(async (data: { user: string; pass: string }) => {
-  const { prisma } = await import("../lib/db");
-  const { user, pass } = data;
-  
-  const dbUser = await prisma.user.findUnique({ where: { username: user } });
-  
-  if (!dbUser) return { error: `帳號 '${user}' 未註冊，請先註冊。` };
-  if (dbUser.password_hash !== pass) return { error: "密碼錯誤或存取被拒。" };
-
-  await prisma.user.update({
-    where: { id: dbUser.id },
-    data: { lastLogin: new Date() }
-  });
-
-  return { success: true };
-});
 
 export const Route = createFileRoute("/login")({
   component: Login,
@@ -36,35 +17,27 @@ function Login() {
   const [out, setOut] = useState([]);
   const navigate = useNavigate();
 
-  async function submit(e) {
+  function submit(e) {
     e.preventDefault();
     if (!user.trim()) { setOut(["[!!] 操作員名稱不可為空"]); return; }
-    
     const u = user.trim();
-    setOut(["[ .. ] Negotiating handshake with AWS mainframes ..."]);
-
+    let users = {};
+    try { users = JSON.parse(localStorage.getItem("cloud-rpg-users") || "{}"); } catch {}
+    const hasAny = Object.keys(users).length > 0;
+    if (hasAny) {
+      if (!users[u]) { setOut([`[!!] 帳號 '${u}' 未註冊，請先註冊。`]); return; }
+      if (users[u] !== pass) { setOut(["[!!] 密碼錯誤。"]); return; }
+    }
+    setOut([
+      "[ .. ] Negotiating handshake with auth.cloudrpg.net ...",
+      "[ ok ] Token signed.",
+      `[ ok ] Welcome, ${u}. Routing to nearest shard ...`,
+    ]);
     try {
-      // ✅ 直接將物件傳入後端函數
-      const res = await loginServerFn({ user: u, pass });
-      
-      if (res.error) {
-        return setOut([`[!!] ${res.error}`]);
-      }
-
-      setOut([
-        "[ ok ] Database handshake complete.",
-        "[ ok ] Token signed.",
-        `[ ok ] Welcome back, ${u}. Routing to nearest shard ...`,
-      ]);
-      
       localStorage.setItem(AUTH_KEY, JSON.stringify({ user: u, ts: Date.now() }));
       window.dispatchEvent(new Event("cloud-rpg-auth-change"));
-      
-      setTimeout(() => navigate({ to: "/play" }), 1500);
-
-    } catch (error) {
-      setOut(["[!!] 無法連線至伺服器核心，請稍後再試"]);
-    }
+    } catch {}
+    setTimeout(() => navigate({ to: "/play" }), 1000);
   }
 
   return (
