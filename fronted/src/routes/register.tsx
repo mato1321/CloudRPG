@@ -10,7 +10,7 @@ export const Route = createFileRoute("/register")({
   ]}),
 });
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_URL = import.meta.env.VITE_API_URL || "http://44.205.216.47:8000";
 
 function Register() {
   const [user, setUser] = useState("");

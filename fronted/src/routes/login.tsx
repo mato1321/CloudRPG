@@ -11,7 +11,7 @@ export const Route = createFileRoute("/login")({
   ]}),
 });
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_URL = import.meta.env.VITE_API_URL || "http://44.205.216.47:8000";
 
 function Login() {
   const [user, setUser] = useState("");

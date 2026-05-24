@@ -121,7 +121,7 @@ const ITEM_LABEL = {
 const SAVE_KEY = "cloud-rpg-save";
 // ⭐ 新增：進度同步配置
 const PROGRESS_SYNC_INTERVAL = 30000;  // 30 秒同步一次
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_URL = import.meta.env.VITE_API_URL || "http://44.205.216.47:8000";
 
 // ⭐ 新增：進度同步到雲端
 async function syncProgressToCloud(state, log, auth) {
