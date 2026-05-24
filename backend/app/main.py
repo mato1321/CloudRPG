@@ -1,32 +1,36 @@
+# @ts-nocheck
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 
-# 設置日誌
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 from app.db.database import Base, engine
 from app.models.user import User
 from app.models.character import Character
 from app.api import auth, character, battle
+from app.api import progress  # ⭐ 導入 progress
 
+# 創建所有表
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="Cloud RPG API", version="0.1.0")
+app = FastAPI(
+    title="Cloud RPG API",
+    description="後端服務",
+    version="0.1.0"
+)
 
-# ✅ 更激進的 CORS 配置
+# CORS 配置
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["*"],
-    max_age=600,
 )
 
-# 加入日誌中間件
+# 日誌中間件
 @app.middleware("http")
 async def log_requests(request, call_next):
     logger.info(f"📥 {request.method} {request.url.path}")
@@ -38,10 +42,11 @@ async def log_requests(request, call_next):
         logger.error(f"❌ 錯誤: {str(e)}", exc_info=True)
         raise
 
-# 路由
+# 註冊路由
 app.include_router(auth.router)
 app.include_router(character.router)
 app.include_router(battle.router)
+app.include_router(progress.router)  # ⭐ 必須在這裡！
 
 @app.get("/")
 async def root():

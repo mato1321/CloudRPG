@@ -119,6 +119,79 @@ const ITEM_LABEL = {
 };
 
 const SAVE_KEY = "cloud-rpg-save";
+// ⭐ 新增：進度同步配置
+const PROGRESS_SYNC_INTERVAL = 30000;  // 30 秒同步一次
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
+// ⭐ 新增：進度同步到雲端
+async function syncProgressToCloud(state, log, auth) {
+  if (!state || !auth?.token) {
+    return false;
+  }
+  
+  try {
+    console.log("📤 同步進度到雲端...");
+    const res = await fetch(`${API_URL}/api/progress/save`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${auth.token}`
+      },
+      body: JSON.stringify({
+        state,
+        log: log.map(l => ({ ...l, shown: l.text.length }))
+      })
+    });
+    
+    if (!res.ok) {
+      const data = await res.json();
+      console.log("❌ 同步失敗:", data);
+      return false;
+    }
+    
+    const data = await res.json();
+    console.log("✅ 進度已上傳:", data);
+    return true;
+  } catch (err) {
+    console.log("❌ 網路錯誤:", err.message);
+    return false;
+  }
+}
+
+// ⭐ 新增：從雲端讀取進度
+async function loadProgressFromCloud(auth) {
+  if (!auth?.token) {
+    return null;
+  }
+  
+  try {
+    console.log("📥 從雲端讀取進度...");
+    const res = await fetch(`${API_URL}/api/progress/load`, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${auth.token}`
+      }
+    });
+    
+    if (!res.ok) {
+      console.log("❌ 讀取失敗");
+      return null;
+    }
+    
+    const data = await res.json();
+    console.log("✅ 已讀取雲端進度:", data);
+    return {
+      state: data.state,
+      log: data.log || [],
+      savedAt: data.last_save_at
+    };
+  } catch (err) {
+    console.log("⚠️ 讀取雲端進度出錯:", err.message);
+    return null;
+  }
+}
+
+
 function readSave() {
   if (typeof window === "undefined") return null;
   try { const raw = localStorage.getItem(SAVE_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; }
@@ -378,6 +451,59 @@ function PlayPage() {
   const skipIntroRef = useRef(!!saved && hasKlass);
   const chatRef = useRef(null);
   const [chatInput, setChatInput] = useState("");
+
+    // ⭐ 新增：認證信息狀態
+  const [auth, setAuth] = useState(null);
+
+  useEffect(() => {
+    setAuth(readAuth());
+  }, []);
+
+  // ⭐ 新增：登入後從雲端讀取進度
+  useEffect(() => {
+    // ✅ 修復：只在初次進入遊戲時讀一次（picking 變成 false）
+    if (!auth?.token || !picking) return;
+    
+    (async () => {
+      const cloudProgress = await loadProgressFromCloud(auth);
+      
+      if (cloudProgress?.state) {
+        console.log("🔄 使用雲端進度");
+        setState(cloudProgress.state);
+        setLog(cloudProgress.log);
+        skipIntroRef.current = true;
+      } else {
+        console.log("💾 使用本地 localStorage 進度");
+      }
+    })();
+  }, [auth?.token, picking]);
+
+
+  // ⭐ 新增：自動同步進度到雲端（每 30 秒）
+  useEffect(() => {
+    if (!state || !auth?.token) return;
+    
+    const syncInterval = setInterval(async () => {
+      await syncProgressToCloud(state, log, auth);
+    }, PROGRESS_SYNC_INTERVAL);
+    
+    return () => clearInterval(syncInterval);
+  }, [state, log, auth?.token]);
+
+  // ⭐ 新增：頁面卸載時同步進度
+  useEffect(() => {
+    const handleBeforeUnload = async () => {
+      if (state && auth?.token) {
+        await syncProgressToCloud(state, log, auth);
+      }
+    };
+    
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [state, log, auth?.token]);
+
+
+
 
   useEffect(() => {
     if (!state) return;
