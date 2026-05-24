@@ -153,8 +153,4 @@ async def clear_progress(
     return {
         "status": "cleared",
         "username": user.username
-<<<<<<< HEAD
-=======
-    }
->>>>>>> ec680b1cfac7494f4f06ef46d2f4840be4bab183
     }
