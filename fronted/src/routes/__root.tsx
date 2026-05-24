@@ -76,6 +76,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "description", content: "Cyberpunk terminal-style multiplayer text adventure." },
     ],
     links: [
+      // ⬇️ 新增這一段設定您的 Favicon ⬇️
+      {
+        rel: "icon",
+        type: "image/x-icon", // 如果您的圖片是 .ico，這裡請改成 "image/x-icon"；若是 .png 請改成 "image/png"
+        href: "/favicon.ico",  // 這裡填入您放在 public 資料夾內的圖片檔名
+      },
+      // ⬆️ 新增結束 ⬆️
       {
         rel: "stylesheet",
         href: appCss,
