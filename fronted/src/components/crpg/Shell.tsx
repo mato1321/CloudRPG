@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useEffect, useState } from "react";
-import { useLocation, useNavigate } from "@tanstack/react-router";
+import { useLocation, useNavigate, Link } from "@tanstack/react-router";
 
 const NAV = [
   { to: "/",          label: "LOBBY"  },
@@ -64,23 +64,24 @@ export function TopBar({ extra = null }) {
     navigate({ to: "/login" });
   }
 
+  // ✅ 修改：使用 Link 組件代替 <a> 標籤
   return (
     <header className="crpg-panel relative z-10 flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2 text-xs">
-      <a href="/" className="flex items-center gap-2 mr-2">
+      <Link to="/" className="flex items-center gap-2 mr-2">
         <span className="text-[#00ff88] crpg-glow text-lg leading-none font-bold tracking-widest">
           ▣ CLOUD<span className="text-[#00e5ff] crpg-glow-cyan">RPG</span>
         </span>
         <span className="text-[10px] text-[#3a8c5e] border border-[#0f3a26] px-1 py-[1px]">v0.9-beta</span>
-      </a>
+      </Link>
       <nav className="flex items-center gap-1 ml-2">
         {NAV.map(n => (
-          <a
+          <Link
             key={n.to}
-            href={n.to}
+            to={n.to}
             className="px-2 py-1 text-[#3a8c5e] hover:text-[#00ff88] hover:crpg-glow border border-transparent hover:border-[#0f3a26] transition"
           >
             [{n.label}]
-          </a>
+          </Link>
         ))}
       </nav>
       <div className="ml-auto flex items-center gap-4">
@@ -94,9 +95,9 @@ export function TopBar({ extra = null }) {
             <button onClick={logout} className="px-2 py-1 border border-[#3a0f1c] text-[#ff4d6d] crpg-glow-red hover:border-[#ff4d6d] transition">[ LOGOUT ]</button>
           </div>
         ) : (
-          <a href="/login" className="px-2 py-1 border border-[#0f3a26] text-[#00e5ff] crpg-glow-cyan hover:border-[#00e5ff] transition">
+          <Link to="/login" className="px-2 py-1 border border-[#0f3a26] text-[#00e5ff] crpg-glow-cyan hover:border-[#00e5ff] transition">
             [ LOGIN ]
-          </a>
+          </Link>
         )}
       </div>
     </header>
@@ -182,7 +183,7 @@ export function Shell({ children, headerExtra = null }) {
           <div className="crpg-panel flex-1 flex flex-col items-center justify-center text-center p-8">
             <div className="text-[#ff4d6d] crpg-glow-red text-sm tracking-widest mb-3">[ ACCESS DENIED ]</div>
             <div className="text-[#7be0a8] text-sm mb-4">未登入終端機。請先取得通行金鑰以存取雲端網格。</div>
-            <a href="/login" className="crpg-panel px-5 py-2 text-[#00ff88] crpg-glow border-[#00ff88]/60 hover:border-[#00ff88]">▶ 前往 LOGIN</a>
+            <Link to="/login" className="crpg-panel px-5 py-2 text-[#00ff88] crpg-glow border-[#00ff88]/60 hover:border-[#00ff88]">▶ 前往 LOGIN</Link>
           </div>
         ) : children}
       </div>
