@@ -64,7 +64,6 @@ export function TopBar({ extra = null }) {
     navigate({ to: "/login" });
   }
 
-  // ✅ 修改：使用 Link 組件代替 <a> 標籤
   return (
     <header className="crpg-panel relative z-10 flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2 text-xs">
       <Link to="/" className="flex items-center gap-2 mr-2">
@@ -151,44 +150,27 @@ export function Particles({ count = 24 }) {
 export function Shell({ children, headerExtra = null }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const [authed, setAuthed] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [showAccess, setShowAccess] = useState(false);
 
-  // ✅ 初始化：檢查認證狀態
+  // ✅ 只在組件初始化時檢查一次
   useEffect(() => {
     setMounted(true);
-    const auth = readAuth();
-    setAuthed(!!auth);
-
-    const sync = () => {
-      const auth = readAuth();
-      setAuthed(!!auth);
-    };
-    window.addEventListener("storage", sync);
-    window.addEventListener("cloud-rpg-auth-change", sync);
-    return () => {
-      window.removeEventListener("storage", sync);
-      window.removeEventListener("cloud-rpg-auth-change", sync);
-    };
   }, []);
 
-  // ✅ 路由變化時的認證檢查（改進版本：不自動跳轉，改為顯示禁止面板）
+  // ✅ 當路由改變時，檢查認證 - 直接跳轉，不顯示任何面板
   useEffect(() => {
     if (!mounted) return;
 
-    // 直接讀 localStorage 避免延遲
-    const currentAuth = readAuth();
-    const isAuthenticated = !!currentAuth;
+    // 直接從 localStorage 讀取認證狀態（避免 state 延遲）
+    const auth = readAuth();
+    const isAuthenticated = !!auth;
     const isPublicPath = PUBLIC_PATHS.has(location.pathname);
 
-    // 如果訪問受保護頁面但未登入，顯示 ACCESS DENIED 面板
+    // 如果訪問受保護頁面但未登入，立即跳轉到 /login
     if (!isAuthenticated && !isPublicPath) {
-      setShowAccess(true);
-    } else {
-      setShowAccess(false);
+      navigate({ to: "/login" });
     }
-  }, [location.pathname, mounted]);
+  }, [location.pathname, mounted, navigate]);
 
   return (
     <main className="crpg-root crpg-scanlines">
@@ -196,13 +178,8 @@ export function Shell({ children, headerExtra = null }) {
       <Particles />
       <div className="relative z-10 flex flex-col gap-3 p-3 h-screen overflow-hidden">
         <TopBar extra={headerExtra} />
-        {showAccess ? (
-          <div className="crpg-panel flex-1 flex flex-col items-center justify-center text-center p-8">
-            <div className="text-[#ff4d6d] crpg-glow-red text-sm tracking-widest mb-3">[ ACCESS DENIED ]</div>
-            <div className="text-[#7be0a8] text-sm mb-4">未登入終端機。請先取得通行金鑰以存取雲端網格。</div>
-            <Link to="/login" className="crpg-panel px-5 py-2 text-[#00ff88] crpg-glow border-[#00ff88]/60 hover:border-[#00ff88]">▶ 前往 LOGIN</Link>
-          </div>
-        ) : children}
+        {/* ✅ 簡化：直接渲染 children，不需要條件判斷和 ACCESS DENIED 面板 */}
+        {children}
       </div>
     </main>
   );
