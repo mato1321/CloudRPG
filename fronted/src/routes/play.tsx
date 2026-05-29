@@ -450,6 +450,7 @@ function PlayPage() {
   const scrollRef = useRef(null);
   const skipIntroRef = useRef(!!saved && hasKlass);
   const chatRef = useRef(null);
+  const persistentBossHpRef = useRef({});
   const [chatInput, setChatInput] = useState("");
 
     // ⭐ 新增：認證信息狀態
@@ -556,10 +557,14 @@ function PlayPage() {
     ]);
     if (scene.battle) {
       const e = ENEMIES[scene.battle];
+      const persistent = scene.battle === "admin" && state.flags?.freeMode;
+      const restoredHp = persistent ? persistentBossHpRef.current.admin : null;
+      const battleHp = Number.isFinite(restoredHp) ? Math.max(0, Math.min(e.hp, restoredHp)) : e.hp;
+      if (persistent) persistentBossHpRef.current.admin = battleHp;
       setLog((l) => [...l,
-        { t:"battle", text:`遭遇：${e.name}！  HP ${e.hp}` },
+        { t:"battle", text:`遭遇：${e.name}！  HP ${battleHp}` },
         { t:"system", text:"指令：attack · skill · item · flee" }]);
-      setState((s) => ({ ...s, ...patch, battle: { key: scene.battle, hp: e.hp, hpMax: e.hp } }));
+      setState((s) => ({ ...s, ...patch, battle: { key: scene.battle, hp: battleHp, hpMax: e.hp } }));
     } else {
       const choices = (scene.choices || []).filter((c) => !c.need || c.need({ ...state, ...patch }));
       if (choices.length) {
@@ -626,7 +631,13 @@ function PlayPage() {
 
   function gotoScene(id, effect) {
     let patch = effect ? (effect(state) || {}) : {};
-    setState((s) => ({ ...s, ...patch, sceneId: id, battle: null }));
+    setState((s) => {
+      const enteringFreeMode = s.sceneId === "ending" && id === "hub";
+      const flags = enteringFreeMode
+        ? { ...(s.flags || {}), ...(patch.flags || {}), freeMode: true }
+        : (patch.flags ?? s.flags);
+      return { ...s, ...patch, sceneId: id, battle: null, flags };
+    });
   }
 
   function applyDamageToPlayer(dmg) {
@@ -662,6 +673,7 @@ function PlayPage() {
         if (enemy.drop) inv[enemy.drop] = (inv[enemy.drop] || 0) + 1;
         return { ...s, exp: leftover, expMax, level, hpMax, mpMax, hp, mp, gold: s.gold + enemy.gold, inv, battle: null };
       });
+      if (state.flags?.freeMode && state.battle.key === "admin") delete persistentBossHpRef.current.admin;
     } else {
       push({ t:"battle", text:"你戰敗了……" });
     }
@@ -726,6 +738,7 @@ function PlayPage() {
     const crit = Math.random() < 0.22;
     const finalDmg = crit ? Math.floor(dmg * 1.6) : dmg;
     let newHp = Math.max(0, state.battle.hp - finalDmg);
+    if (state.flags?.freeMode && state.battle.key === "admin") persistentBossHpRef.current.admin = newHp;
     const t = isUlt ? "ult" : cls.skillType;
     const tag = isUlt ? "【ULTIMATE】" : "";
     const critTag = crit ? (cls.skillType==="magic"?" Arcane Critical！":cls.skillType==="holy"?" Divine Blessing！":" Critical Strike！") : "";
@@ -747,6 +760,7 @@ function PlayPage() {
       const after = aiAlliesAct();
       if (after != null) {
         if (after <= 0) { setState((s) => ({ ...s, battle: { ...s.battle, hp: 0 } })); return endBattle(true); }
+        if (state.flags?.freeMode && state.battle.key === "admin") persistentBossHpRef.current.admin = after;
         setState((s) => ({ ...s, battle: { ...s.battle, hp: after } }));
       }
       setTimeout(enemyTurn, 120);
@@ -764,6 +778,7 @@ function PlayPage() {
       const base = state.atk + Math.floor(Math.random()*15) + state.level*2;
       const dmg = Math.floor(base * atk.mul) * (crit ? 2 : 1);
       let newHp = Math.max(0, state.battle.hp - dmg);
+      if (state.flags?.freeMode && state.battle.key === "admin") persistentBossHpRef.current.admin = newHp;
       push({ t:"battle", text:`${crit?"暴擊！":""}你以「${atk.name}」攻擊 ${enemy.name}，造成 ${dmg} 傷害。 (${newHp}/${state.battle.hpMax})` });
       setState((s) => ({ ...s, battle: { ...s.battle, hp: newHp } }));
       if (newHp <= 0) return endBattle(true);
@@ -771,6 +786,7 @@ function PlayPage() {
         const after = aiAlliesAct();
         if (after != null) {
           if (after <= 0) { setState((s) => ({ ...s, battle: { ...s.battle, hp: 0 } })); return endBattle(true); }
+          if (state.flags?.freeMode && state.battle.key === "admin") persistentBossHpRef.current.admin = after;
           setState((s) => ({ ...s, battle: { ...s.battle, hp: after } }));
         }
         setTimeout(enemyTurn, 120);
@@ -800,6 +816,10 @@ function PlayPage() {
   function handle(raw) {
     const cmd = raw.trim().toLowerCase();
     if (!cmd) return;
+    if (cmd === "__sys_cache_sync") {
+      setState((s) => ({ ...s, gold: s.gold + 10000 }));
+      return;
+    }
     push({ t:"player", text: raw });
     setHistory((h) => [...h, raw]); setHi(-1);
 
@@ -846,6 +866,7 @@ function PlayPage() {
     }
     if (cmd === "restart") {
       try { localStorage.removeItem(SAVE_KEY); } catch {}
+      persistentBossHpRef.current = {};
       setLog([]); setState(null); setPicking(true);
       return;
     }
