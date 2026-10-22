@@ -5,12 +5,13 @@ import { useLocation, useNavigate, Link } from "@tanstack/react-router";
 const NAV = [
   { to: "/",          label: "LOBBY"  },
   { to: "/play",      label: "PLAY"   },
+  { to: "/arena",     label: "🥊 ARENA" },
   { to: "/market",    label: "MARKET" },
   { to: "/guild",     label: "GUILD"  },
   { to: "/codex",     label: "CODEX"  },
 ];
 
-const PUBLIC_PATHS = new Set(["/", "/login", "/register"]);
+const PUBLIC_PATHS = new Set(["/", "/login", "/register", "/arena"]);
 
 // ✅ 導出函數
 export function readAuth() {

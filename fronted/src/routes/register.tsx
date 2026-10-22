@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { Shell, Panel } from "../components/crpg/Shell";
 
@@ -10,7 +10,7 @@ export const Route = createFileRoute("/register")({
   ]}),
 });
 
-const API_URL = import.meta.env.VITE_API_URL || "http://44.205.216.47:8000";
+const API_URL = import.meta.env.VITE_API_URL || (typeof window !== "undefined" ? (window.location.port === "" || window.location.port === "80" ? window.location.origin : `${window.location.protocol}//${window.location.hostname}:8000`) : "http://localhost:8000");
 
 function Register() {
   const [user, setUser] = useState("");
@@ -18,9 +18,13 @@ function Register() {
   const [pass2, setPass2] = useState("");
   const [out, setOut] = useState([]);
   const [loading, setLoading] = useState(false);
+  // ✅ 水合完成前停用送出，避免原生 GET 表單把密碼帶進網址
+  const [ready, setReady] = useState(false);
+  const navigate = useNavigate();
 
   // Debug：頁面加載時
   useEffect(() => {
+    setReady(true);
     console.log("✅ Register 組件已加載");
     return () => console.log("❌ Register 組件即將卸載");
   }, []);
@@ -79,7 +83,7 @@ function Register() {
       // 延遲更久，確保頁面有時間顯示成功訊息
       setTimeout(() => {
         console.log("🔄 跳轉到登入頁面");
-        window.location.href = "/login";
+        navigate({ to: "/login" });
       }, 3000);
       
     } catch (err) {
@@ -97,7 +101,7 @@ function Register() {
           <Panel title="NEW OPERATOR REGISTRATION" className="w-full max-w-md">
             <h1 className="text-[#00e5ff] crpg-glow-cyan text-xl mb-4">register --new</h1>
             
-            <form onSubmit={submit} className="space-y-3 text-sm">
+            <form method="post" onSubmit={submit} className="space-y-3 text-sm">
               <input
                 type="text"
                 placeholder="帳號"
@@ -128,17 +132,17 @@ function Register() {
               <div className="flex gap-2 pt-2">
                 <button
                   type="submit"
-                  disabled={loading}
+                  disabled={loading || !ready}
                   className="crpg-panel px-4 py-2 text-[#00e5ff] crpg-glow-cyan flex-1 disabled:opacity-50"
                 >
                   {loading ? "[ 創建中... ]" : "[ create account ]"}
                 </button>
-                <a
-                  href="/login"
+                <Link
+                  to="/login"
                   className="crpg-panel px-4 py-2 text-[#00ff88] crpg-glow text-center"
                 >
                   [ back ]
-                </a>
+                </Link>
               </div>
             </form>
             

@@ -51,6 +51,9 @@ function Lobby() {
             <Link to="/play" className="crpg-panel px-5 py-2 text-[#00ff88] crpg-glow border-[#00ff88]/60 hover:border-[#00ff88]">
               ▶ ENTER WORLD
             </Link>
+            <Link to="/arena" className="crpg-panel px-5 py-2 text-[#ff4d6d] crpg-glow-red border-[#ff4d6d]/60 hover:border-[#ff4d6d] font-bold">
+              🥊 STREET FIGHTER ARENA
+            </Link>
             <Link to="/login" className="crpg-panel px-5 py-2 text-[#00e5ff] crpg-glow-cyan">
               ◇ LOGIN / REGISTER
             </Link>

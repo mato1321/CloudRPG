@@ -1,9 +1,13 @@
 // @ts-nocheck
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Shell, Stat, readAuth } from "../components/crpg/Shell";
+import { Shell, Stat, readAuth, clearAuth } from "../components/crpg/Shell";
+import { StoryBattleArena } from "../components/crpg/StoryBattleArena";
+import { ShopModal } from "../components/crpg/ShopModal";
 
 export const Route = createFileRoute("/play")({
+  // ✅ 修復水合錯誤：整頁狀態來自 localStorage，伺服器端渲染一定對不上，改成只在瀏覽器渲染
+  ssr: false,
   component: PlayPage,
   head: () => ({ meta: [
     { title: "Cloud RPG — Play the Story" },
@@ -99,19 +103,29 @@ const CLASSES = {
 /* ───────────── STORY ENGINE ───────────── */
 
 const ENEMIES = {
-  minions:    { name: "魔王軍雜魚 + 雜魚老大", hp: 70,  atk: [4, 10],  xp: 60,  gold: 40 },
-  goblin:     { name: "哥布林群",              hp: 35,  atk: [3, 8],   xp: 30,  gold: 25 },
-  duke:       { name: "羅劫公爵",              hp: 160, atk: [10, 20], xp: 200, gold: 220, drop: "stone_red"  },
-  abyss:      { name: "冥盡洞主",              hp: 200, atk: [12, 22], xp: 260, gold: 280, drop: "stone_blue" },
-  skyisle:    { name: "天光島嶼之主",          hp: 240, atk: [14, 26], xp: 320, gold: 340, drop: "stone_gold" },
-  demonlord:  { name: "魔王 (21世紀程式語言版)", hp: 90, atk: [4, 9],   xp: 400, gold: 500, joke: true },
-  admin:      { name: "C:\\mato\\user\\Administrator", hp: 666, atk: [18, 36], xp: 9999, gold: 9999, isFinal: true },
+  minions:    { name: "魔王軍雜魚 + 雜魚老大", hp: 200, atk: [5, 11],  xp: 100, gold: 150 },
+  goblin:     { name: "哥布林群",              hp: 240, atk: [7, 14],  xp: 140, gold: 220 },
+  duke:       { name: "羅劫公爵",              hp: 320, atk: [11, 20], xp: 260, gold: 450, drop: "stone_red"  },
+  abyss:      { name: "冥盡洞主",              hp: 400, atk: [14, 24], xp: 340, gold: 600, drop: "stone_blue" },
+  skyisle:    { name: "天光島嶼之主",          hp: 480, atk: [17, 28], xp: 420, gold: 800, drop: "stone_gold" },
+  demonlord:  { name: "魔王 (21世紀程式語言版)", hp: 550, atk: [20, 32], xp: 600, gold: 1200, joke: true },
+  admin:      { name: "C:\\mato\\user\\Administrator", hp: 680, atk: [24, 40], xp: 9999, gold: 9999, isFinal: true },
 };
+
+const INFINITE_GOLD = 999999999;
+function isAdminAccount(nameOrUser?: string | null) {
+  const a = readAuth();
+  const u = (nameOrUser || a?.user || "").toString().trim().toLowerCase();
+  return u === "admin";
+}
 
 const STONE_LABEL = { stone_red: "傳說之石・赤", stone_blue: "傳說之石・蒼", stone_gold: "傳說之石・金" };
 const ITEM_LABEL = {
   herb: "草藥", mana: "魔力藥水",
-  skillbook: "高級技能書", totem: "不死圖騰",
+  skillbook_1: "進階技能書・卷一",
+  skillbook_2: "進階技能書・卷二",
+  skillbook: "終極奧義技能書",
+  totem: "不死圖騰",
   weapon_basic: "初級職業武器", weapon_adv: "高級職業武器",
   terminus: "???終端機",
   junk: "很廢的武器", sword: "比較強的武器",
@@ -121,7 +135,7 @@ const ITEM_LABEL = {
 const SAVE_KEY = "cloud-rpg-save";
 // ⭐ 新增：進度同步配置
 const PROGRESS_SYNC_INTERVAL = 30000;  // 30 秒同步一次
-const API_URL = import.meta.env.VITE_API_URL || "http://44.205.216.47:8000";
+const API_URL = import.meta.env.VITE_API_URL || (typeof window !== "undefined" ? (window.location.port === "" || window.location.port === "80" ? window.location.origin : `${window.location.protocol}//${window.location.hostname}:8000`) : "http://localhost:8000");
 
 // ⭐ 新增：進度同步到雲端
 async function syncProgressToCloud(state, log, auth) {
@@ -143,8 +157,9 @@ async function syncProgressToCloud(state, log, auth) {
       })
     });
     
+    if (res.status === 401) return "expired";
     if (!res.ok) {
-      const data = await res.json();
+      const data = await res.json().catch(() => ({ status: res.status }));
       console.log("❌ 同步失敗:", data);
       return false;
     }
@@ -173,6 +188,7 @@ async function loadProgressFromCloud(auth) {
       }
     });
     
+    if (res.status === 401) return { expired: true };
     if (!res.ok) {
       console.log("❌ 讀取失敗");
       return null;
@@ -417,10 +433,13 @@ function initialStateFor(klass) {
     klass, klassName: c.name,
     hp: c.stats.hp, hpMax: c.stats.hpMax,
     mp: c.stats.mp, mpMax: c.stats.mpMax,
-    exp: 0, expMax: 200, level: 1, gold: 50,
+    exp: 0, expMax: 200, level: 1, gold: isAdminAccount() ? INFINITE_GOLD : 50,
     atk: c.stats.atk,
-    inv: { herb: 0, mana: 0 },
+    inv: { herb: 2, mana: 1 },
     flags: {},
+    classLocked: true,
+    learnedSkill2: false,
+    learnedSkill3: false,
     learnedUlt: false,
     equipped: [],
     avatar: null,
@@ -440,7 +459,11 @@ function PlayPage() {
   const [picking, setPicking] = useState(!hasKlass);
 
   const [state, setState] = useState(() => {
-    if (saved?.state?.klass) return { name: "WANDERER_77", sceneId: "classroom", battle: null, ...saved.state };
+    if (saved?.state?.klass) {
+      const s = { name: "WANDERER_77", sceneId: "classroom", battle: null, ...saved.state };
+      if (isAdminAccount(s.name)) s.gold = INFINITE_GOLD;
+      return s;
+    }
     return null;
   });
   const [log, setLog] = useState(() => saved?.log || []);
@@ -451,32 +474,59 @@ function PlayPage() {
   const skipIntroRef = useRef(!!saved && hasKlass);
   const chatRef = useRef(null);
   const [chatInput, setChatInput] = useState("");
+  const [showShopModal, setShowShopModal] = useState(false);
+  const [shopToast, setShopToast] = useState(null);
+  const [showTerminal, setShowTerminal] = useState(false);
 
     // ⭐ 新增：認證信息狀態
   const [auth, setAuth] = useState(null);
+  const navigate = useNavigate();
+  const inputRef = useRef(null);
 
   useEffect(() => {
     setAuth(readAuth());
   }, []);
 
+  // ✅ Token 過期（後端回 401）→ 清掉登入狀態並回登入頁，本機存檔保留
+  function onAuthExpired() {
+    clearAuth();
+    window.dispatchEvent(new Event("cloud-rpg-auth-change"));
+    navigate({ to: "/login" });
+  }
+
   // ⭐ 新增：登入後從雲端讀取進度
   useEffect(() => {
     // ✅ 修復：只在初次進入遊戲時讀一次（picking 變成 false）
-    if (!auth?.token || !picking) return;
-    
+    if (!auth?.token) return;
+
     (async () => {
       const cloudProgress = await loadProgressFromCloud(auth);
-      
-      if (cloudProgress?.state) {
+      if (cloudProgress?.expired) return onAuthExpired();
+
+      // ✅ 本機存檔比雲端新（例如離線玩了一段）就保留本機，不被舊的雲端進度蓋掉
+      // （用進頁面當下的快照比較，因為 auto-save 一掛載就會刷新 localStorage 的 ts）
+      const local = savedRef.current;
+      const cloudTs = cloudProgress?.savedAt ? Date.parse(cloudProgress.savedAt + "Z") : 0;
+      if (local?.state?.klass && (local.ts || 0) > cloudTs) {
+        console.log("💾 本機進度較新，保留本機進度");
+        return;
+      }
+
+      if (cloudProgress?.state && Object.keys(cloudProgress.state).length > 0) {
         console.log("🔄 使用雲端進度");
-        setState(cloudProgress.state);
+        const loadedState = { ...cloudProgress.state };
+        if (isAdminAccount(auth?.user || loadedState.name)) {
+          loadedState.gold = INFINITE_GOLD;
+        }
+        setState(loadedState);
         setLog(cloudProgress.log);
         skipIntroRef.current = true;
+        if (loadedState.klass) setPicking(false);
       } else {
         console.log("💾 使用本地 localStorage 進度");
       }
     })();
-  }, [auth?.token, picking]);
+  }, [auth?.token]);
 
 
   // ⭐ 新增：自動同步進度到雲端（每 30 秒）
@@ -484,7 +534,7 @@ function PlayPage() {
     if (!state || !auth?.token) return;
     
     const syncInterval = setInterval(async () => {
-      await syncProgressToCloud(state, log, auth);
+      if ((await syncProgressToCloud(state, log, auth)) === "expired") onAuthExpired();
     }, PROGRESS_SYNC_INTERVAL);
     
     return () => clearInterval(syncInterval);
@@ -508,9 +558,16 @@ function PlayPage() {
   useEffect(() => {
     if (!state) return;
     const a = readAuth();
-    if (a?.user && state.name !== a.user) setState((s) => ({ ...s, name: a.user }));
+    const isAdm = isAdminAccount(a?.user || state.name);
+    if ((a?.user && state.name !== a.user) || (isAdm && state.gold < INFINITE_GOLD)) {
+      setState((s) => ({
+        ...s,
+        name: a?.user || s.name,
+        gold: isAdm ? INFINITE_GOLD : s.gold,
+      }));
+    }
     // eslint-disable-next-line
-  }, [state ? true : false]);
+  }, [state ? true : false, auth?.user]);
 
   // World chat
   const [chat, setChat] = useState(() => Array.from({ length: 5 }, (_, i) => ({
@@ -538,7 +595,7 @@ function PlayPage() {
   useEffect(() => {
     if (!state) return;
     try { localStorage.setItem(SAVE_KEY, JSON.stringify({ state, log, ts: Date.now() })); } catch {}
-  }, [state?.sceneId, state?.level, state?.gold, state?.hp, state?.mp, state?.atk, state?.learnedUlt]);
+  }, [state?.sceneId, state?.klass, state?.level, state?.gold, state?.hp, state?.mp, state?.atk, state?.learnedSkill2, state?.learnedSkill3, state?.learnedUlt, state?.inv, state?.equipped]);
 
   const scene = state ? SCENES[state.sceneId] : null;
 
@@ -557,9 +614,9 @@ function PlayPage() {
     if (scene.battle) {
       const e = ENEMIES[scene.battle];
       setLog((l) => [...l,
-        { t:"battle", text:`遭遇：${e.name}！  HP ${e.hp}` },
-        { t:"system", text:"指令：attack · skill · item · flee" }]);
-      setState((s) => ({ ...s, ...patch, battle: { key: scene.battle, hp: e.hp, hpMax: e.hp } }));
+        { t:"battle", text:`遭遇：${e.name}！  [已啟動 2D 街機格鬥決戰模式]` },
+        { t:"system", text:"鍵盤操作：[WASD]移動/格擋 · [F/J]輕擊 · [G/K]重擊 · [R/L]技能1 · [T/U]技能2 · [Y/O]技能3 · [Q/I]奧義 · [H]草藥" }]);
+      setState((s) => ({ ...s, ...patch, battle: { key: scene.battle, hp: e.hp * 3, hpMax: e.hp * 3 } }));
     } else {
       const choices = (scene.choices || []).filter((c) => !c.need || c.need({ ...state, ...patch }));
       if (choices.length) {
@@ -573,6 +630,10 @@ function PlayPage() {
   }, [state?.sceneId, picking]);
 
   useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [log]);
+
+  // 戰鬥結束後把鍵盤焦點還給指令輸入框（戰鬥中由 StoryBattleArena 接管鍵盤）
+  const inBattle = !!state?.battle;
+  useEffect(() => { if (!inBattle) inputRef.current?.focus(); }, [inBattle]);
 
   function push(...lines) {
     setLog((l) => [...l, ...lines.map((ln) => ({ ...ln, shown: 0 }))]);
@@ -601,7 +662,7 @@ function PlayPage() {
     setState(initial);
     const partyNames = init.party.map((p) => `${p.name}(${CLASSES[p.klass].name}·AI)`).join("、");
     setLog([
-      { t:"system", text:`[SYS] 職業已選擇：${CLASSES[id].name} (${CLASSES[id].en})`, shown:0 },
+      { t:"system", text:`[SYS] 職業已選定並鎖定：${CLASSES[id].name} (${CLASSES[id].en}) — 選定後不可更改（若需轉職請至 [MARKET] 黑市購買「轉職聖典」）`, shown:0 },
       { t:"system", text:`[MATCHMAKING] 搜尋線上玩家中…未滿 3 人，由 AI 補位。`, shown:0 },
       { t:"system", text:`[PARTY] 你的三人小隊：${initial.name} ＋ ${partyNames}`, shown:0 },
     ]);
@@ -646,7 +707,8 @@ function PlayPage() {
     });
   }
 
-  function endBattle(win) {
+  function endBattle(win, finalHp = null, finalMp = null) {
+    if (!state?.battle) return;
     const enemy = ENEMIES[state.battle.key];
     const next = win ? scene.winGo : scene.loseGo;
     if (win) {
@@ -654,16 +716,30 @@ function PlayPage() {
            { t:"system", text:`[REWARD] +${enemy.xp} EXP · +${enemy.gold} GOLD${enemy.drop ? ` · 獲得 ${STONE_LABEL[enemy.drop]}` : ""}` });
       if (enemy.joke) push({ t:"player", text:"三人：不是，這麼廢的嗎？" });
       setState((s) => {
+        if (!s) return s;
         const exp = s.exp + enemy.xp;
-        let level = s.level, expMax = s.expMax, hpMax = s.hpMax, mpMax = s.mpMax, hp = s.hp, mp = s.mp;
+        let level = s.level, expMax = s.expMax, hpMax = s.hpMax, mpMax = s.mpMax, atk = s.atk;
+        let hp = finalHp != null ? finalHp : s.hp;
+        let mp = finalMp != null ? finalMp : s.mp;
         let leftover = exp;
-        while (leftover >= expMax) { leftover -= expMax; level++; expMax = Math.floor(expMax*1.4); hpMax += 30; mpMax += 15; hp = hpMax; mp = mpMax; push({ t:"system", text:`▲ LEVEL UP! → LV ${level}` }); }
+        while (leftover >= expMax) {
+          leftover -= expMax;
+          level++;
+          expMax = Math.floor(expMax*1.4);
+          hpMax += 30;
+          mpMax += 15;
+          atk += 4;
+          hp = hpMax;
+          mp = mpMax;
+          push({ t:"system", text:`▲ LEVEL UP! → LV ${level} (HP+30, MP+15, ATK+4)` });
+        }
         const inv = { ...s.inv };
         if (enemy.drop) inv[enemy.drop] = (inv[enemy.drop] || 0) + 1;
-        return { ...s, exp: leftover, expMax, level, hpMax, mpMax, hp, mp, gold: s.gold + enemy.gold, inv, battle: null };
+        return { ...s, exp: leftover, expMax, level, hpMax, mpMax, hp, mp, atk, gold: s.gold + enemy.gold, inv, battle: null };
       });
     } else {
-      push({ t:"battle", text:"你戰敗了……" });
+      push({ t:"battle", text:"你戰敗了……在據點恢復一半體力後重新出發。" });
+      setState((s) => s ? ({ ...s, hp: Math.max(1, Math.floor(s.hpMax / 2)), battle: null }) : s);
     }
     setTimeout(() => gotoScene(next), 50);
   }
@@ -776,17 +852,21 @@ function PlayPage() {
         setTimeout(enemyTurn, 120);
       }, 120);
     } else if (kind === "skill") {
-      const idx = opts.index;
-      const skill = (idx != null && cls.normal[idx])
-        ? cls.normal[idx]
-        : cls.normal[Math.floor(Math.random()*cls.normal.length)];
+      const idx = opts.index ?? 0;
+      if (idx === 1 && !state.learnedSkill2) {
+        return push({ t:"system", text:`[LOCKED] 尚未習得「${cls.normal[1].name}」，請至 [MARKET] 黑市購買「進階技能書・卷一」解鎖！` });
+      }
+      if (idx === 2 && !state.learnedSkill3) {
+        return push({ t:"system", text:`[LOCKED] 尚未習得「${cls.normal[2].name}」，請至 [MARKET] 黑市購買「進階技能書・卷二」解鎖！` });
+      }
+      const skill = (idx != null && cls.normal[idx]) ? cls.normal[idx] : cls.normal[0];
       castSkill(skill, false);
     } else if (kind === "ult") {
-      if (!state.learnedUlt) return push({ t:"system", text:"尚未習得高級技能。" });
+      if (!state.learnedUlt) return push({ t:"system", text:"[LOCKED] 尚未習得終極奧義，請至 [MARKET] 黑市購買「終極奧義技能書」解鎖！" });
       castSkill(cls.ultimate, true);
     } else if (kind === "item") {
       if (!state.inv.herb) return push({ t:"system", text:"沒有草藥。" });
-      const heal = 50;
+      const heal = 60;
       push({ t:"system", text:`使用草藥，恢復 ${heal} HP。` });
       setState((s) => ({ ...s, hp: Math.min(s.hpMax, s.hp+heal), inv: { ...s.inv, herb: s.inv.herb-1 } }));
       setTimeout(enemyTurn, 100);
@@ -806,7 +886,11 @@ function PlayPage() {
     if (cmd === "help") {
       return push({ t:"system", text:"通用：help · look · stats · skills · party · inv · clear · save · load · restart" },
                   { t:"system", text:"戰鬥：attack [N] · skill [N] · ult · item · flee  (N = 招式編號)" },
-                  { t:"system", text:"場景：依下方列出的場景指令操作。商品請至 /market 購買。" });
+                  { t:"system", text:"場景：依下方列出的場景指令操作。輸入 shop 開啟快速黑市（戰鬥中也可以）。" });
+    }
+    if (cmd === "shop" || cmd === "market") {
+      setShowShopModal(true);
+      return push({ t:"system", text:"[SYS] 開啟快速黑市（ESC 關閉）" });
     }
     if (cmd === "clear") return setLog([]);
     if (cmd === "save") return saveGame();
@@ -818,13 +902,15 @@ function PlayPage() {
     }
     if (cmd === "skills") {
       const cls = CLASSES[state.klass];
-      return push({ t:"system", text:`── ${cls.name} 技能列表 ──` },
-        { t:"dim", text:"[ATTACKS] (用 attack N)" },
+      return push({ t:"system", text:`── ${cls.name} 技能列表 (鍵盤街機戰鬥快捷鍵) ──` },
+        { t:"dim", text:"[普通攻擊] [F/J] 輕擊 · [G/K] 重擊" },
         ...(cls.attacks||[]).map((a, i) => ({ t:"dim", text:`  ${i+1}. ${a.name}（×${a.mul}）` })),
-        { t:"dim", text:"[SKILLS] (用 skill N)" },
-        ...cls.normal.map((sk, i) => ({ t:"dim", text:`  ${i+1}. ${sk.name}（MP ${sk.mp}）` })),
+        { t:"dim", text:"[職業技能] (可在 /market 購買技能書擴充)" },
+        { t:"player", text:`  1. [R/L] ${cls.normal[0].name}（MP ${cls.normal[0].mp}）— 已習得` },
+        { t: state.learnedSkill2 ? "player" : "dim", text:`  2. [T/U] ${state.learnedSkill2 ? cls.normal[1].name : "??? (需於商店購買「進階技能書・卷一」)"}` },
+        { t: state.learnedSkill3 ? "player" : "dim", text:`  3. [Y/O] ${state.learnedSkill3 ? cls.normal[2].name : "??? (需於商店購買「進階技能書・卷二」)"}` },
         { t: state.learnedUlt ? "ult" : "dim",
-          text: state.learnedUlt ? `★ 高級：${cls.ultimate.name}（MP ${cls.ultimate.mp}）` : `★ 高級：??? （需於商店購買高級技能書解鎖）` });
+          text: state.learnedUlt ? `★ 奧義 [Q/I]：${cls.ultimate.name}（100% 氣條施放）` : `★ 奧義 [Q/I]：??? （需於商店購買「終極奧義技能書」解鎖）` });
     }
     if (cmd === "party") {
       const lines = [{ t:"system", text:"── 三人組隊 (Matchmaking) ──" },
@@ -845,8 +931,22 @@ function PlayPage() {
       return push({ t:"dim", text:`你身處：${scene.location}` }, ...dyn);
     }
     if (cmd === "restart") {
-      try { localStorage.removeItem(SAVE_KEY); } catch {}
-      setLog([]); setState(null); setPicking(true);
+      // Keep locked class! Only reset story scene to classroom
+      const lockedKlass = state.klass;
+      const cls = CLASSES[lockedKlass];
+      skipIntroRef.current = false;
+      setLog([
+        { t:"system", text:`[SYS] 故事章節已重啟。你的職業已鎖定為「${cls.icon} ${cls.name}」不可直接更改。`, shown:0 },
+        { t:"system", text:`[SYS] 若欲轉換職業，請前往 [MARKET] 黑市購買高價「轉職聖典」！`, shown:0 },
+      ]);
+      setState((s) => ({
+        ...s,
+        sceneId: "classroom",
+        battle: null,
+        hp: s.hpMax,
+        mp: s.mpMax,
+        quest: "醒來。",
+      }));
       return;
     }
 
@@ -888,9 +988,11 @@ function PlayPage() {
       <Shell>
         <div className="flex-1 flex flex-col items-center justify-center gap-6 overflow-auto crpg-scroll p-4">
           <div className="text-center">
-            <div className="text-[#3a8c5e] text-xs tracking-[0.4em] mb-2">// CHARACTER ALLOCATION</div>
-            <h1 className="text-[#00ff88] crpg-glow text-2xl tracking-widest">▌ 選擇你的職業</h1>
-            <p className="text-[#7be0a8] text-xs mt-2">職業將決定你的初始屬性、可學技能與專屬武器。</p>
+            <div className="text-[#3a8c5e] text-xs tracking-[0.4em] mb-2">// CHARACTER ALLOCATION (PERMANENT LOCK)</div>
+            <h1 className="text-[#00ff88] crpg-glow text-2xl tracking-widest">▌ 選擇你的初始職業（選定後鎖定）</h1>
+            <p className="text-[#7be0a8] text-xs mt-2">
+              故事模式採用 2D 鍵盤街機格鬥決戰！選定職業後<span className="text-[#ff4d6d] font-bold">不可直接更改</span>（若需更換職業，須至 [MARKET] 黑市購買高價「轉職聖典」）。
+            </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-5xl w-full">
             {Object.values(CLASSES).map((c) => (
@@ -909,30 +1011,32 @@ function PlayPage() {
                   <div><div className="text-[#3a8c5e]">MP</div><div className="text-[#00e5ff] crpg-glow-cyan">{c.stats.mp}</div></div>
                   <div><div className="text-[#3a8c5e]">ATK</div><div className="text-[#ffd60a] crpg-glow-yellow">{c.stats.atk}</div></div>
                 </div>
-                <div className="text-[10px] text-[#3a8c5e] mb-1">初始技能</div>
+                <div className="text-[10px] text-[#3a8c5e] mb-1">街機格鬥技能（商店可買技能書擴充）</div>
                 <ul className="text-[11px] text-[#7be0a8] space-y-0.5 mb-3">
-                  {c.normal.map((sk) => <li key={sk.name}>· {sk.name}</li>)}
-                  <li className="text-[#3a8c5e]">★ 高級：??? （商店解鎖）</li>
+                  <li>· 初始技能 [R/L]：{c.normal[0].name}</li>
+                  <li className="text-[#3a8c5e]">· 進階卷一 [T/U]：{c.normal[1].name}（商店解鎖）</li>
+                  <li className="text-[#3a8c5e]">· 進階卷二 [Y/O]：{c.normal[2].name}（商店解鎖）</li>
+                  <li className="text-[#3a8c5e]">★ 終極奧義 [Q/I]：{c.ultimate.name}（商店解鎖）</li>
                 </ul>
                 <div className="text-[10px] text-[#3a8c5e]">專屬武器</div>
                 <div className="text-[11px] text-[#cfeedd]">{c.weaponBasic.name} → {c.weaponAdv.name}</div>
                 <div className={`mt-4 text-center text-[11px] py-1.5 border ${c.border}`}>
-                  [ 選擇 {c.name} ]
+                  [ 鎖定選擇 {c.name} ]
                 </div>
               </button>
             ))}
           </div>
-          <div className="text-[10px] text-[#3a8c5e]">建立角色後將自動存檔，下次進入直接讀檔。</div>
+          <div className="text-[10px] text-[#ffd60a]">⚠️ 建立角色後職業即永久綁定並自動存檔；欲學更多技能或轉職請前往 [MARKET] 黑市商店。</div>
         </div>
       </Shell>
     );
   }
 
-  const cls = CLASSES[state.klass];
+  const cls = CLASSES[state.klass] || CLASSES.warrior;
 
   const headerExtra = (
     <>
-      <Stat label="CLASS" value={`${cls.icon} ${cls.name}`} color={cls.color} />
+      <Stat label="CLASS" value={`${cls.icon} ${cls.name} [LOCKED]`} color={cls.color} />
       <Stat label="HP"   value={`${state.hp}/${state.hpMax}`} color="text-[#ff4d6d] crpg-glow-red" />
       <Stat label="MP"   value={`${state.mp}/${state.mpMax}`} color="text-[#00e5ff] crpg-glow-cyan" />
       <Stat label="GOLD" value={state.gold} color="text-[#ffd60a] crpg-glow-yellow" />
@@ -942,9 +1046,11 @@ function PlayPage() {
 
   const choices = state.battle
     ? [
-        { cmd:"attack", label:"普通攻擊" },
-        { cmd:"skill",  label:`隨機技能 (${cls.name})` },
-        ...(state.learnedUlt ? [{ cmd:"ult", label:`★ ${cls.ultimate.name} (MP ${cls.ultimate.mp})` }] : []),
+        { cmd:"attack", label:`普通攻擊 (${cls.attacks?.[0]?.name || "輕擊"})` },
+        { cmd:"skill 1", label:`技能1：${cls.normal[0].name}` },
+        ...(state.learnedSkill2 ? [{ cmd:"skill 2", label:`技能2：${cls.normal[1].name}` }] : []),
+        ...(state.learnedSkill3 ? [{ cmd:"skill 3", label:`技能3：${cls.normal[2].name}` }] : []),
+        ...(state.learnedUlt ? [{ cmd:"ult", label:`★ 奧義：${cls.ultimate.name}` }] : []),
         { cmd:"item",   label:`使用草藥 (×${state.inv.herb||0})` },
         { cmd:"flee",   label:"逃跑" },
       ]
@@ -952,12 +1058,65 @@ function PlayPage() {
 
   return (
     <Shell headerExtra={headerExtra}>
+      {showShopModal && (
+        <ShopModal
+          state={state}
+          isAdmin={isAdminAccount(state.name)}
+          onClose={() => setShowShopModal(false)}
+          onPurchased={(next, msg) => {
+            setState(next);
+            push({ t: "equip", text: `[MARKET] ${msg}` });
+          }}
+        />
+      )}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-3 flex-1 min-h-0 overflow-hidden">
         <section className="crpg-panel flex flex-col overflow-hidden min-h-0">
           <div className="flex items-center justify-between px-3 py-1.5 border-b border-[#0f3a26] text-[10px] uppercase tracking-widest">
-            <span className="text-[#3a8c5e]">tty1 · {scene.location || state.sceneId}{state.battle ? "  ·  [⚔ COMBAT]" : ""}</span>
+            <span className="text-[#3a8c5e]">tty1 · {scene.location || state.sceneId}{state.battle ? "  ·  [⚔ INTERACTIVE ARCADE COMBAT]" : ""}</span>
             <span className="text-[#3a8c5e]">[●REC]</span>
           </div>
+
+          {state.battle && ENEMIES[state.battle.key] && (
+            <StoryBattleArena
+              state={state}
+              enemyKey={state.battle.key}
+              enemyCfg={ENEMIES[state.battle.key]}
+              classCfg={cls}
+              onUseHerb={(newHp) => {
+                setState((s) => s ? ({ ...s, hp: newHp, inv: { ...s.inv, herb: Math.max(0, (s.inv.herb || 1) - 1) } }) : s);
+                push({ t: "system", text: "[ITEM] 在格鬥中使用草藥，恢復 60 HP！" });
+              }}
+              onUseMana={(newMp) => {
+                setState((s) => s ? ({ ...s, mp: newMp, inv: { ...s.inv, mana: Math.max(0, (s.inv.mana || 1) - 1) } }) : s);
+                push({ t: "system", text: "[ITEM] 在格鬥中使用魔力藥水，恢復 60 MP 並充能 50% 必殺氣條！" });
+              }}
+              onUseTotem={(reviveHp) => {
+                setState((s) => s ? ({ ...s, hp: reviveHp, inv: { ...s.inv, totem: Math.max(0, (s.inv.totem || 1) - 1) } }) : s);
+                push({ t: "relic", text: "★ 不死圖騰發出耀眼光芒！你從致命傷中復活並恢復 60% HP！" });
+              }}
+              onSyncHpMp={(newHp, newMp, newEnemyHp) => {
+                setState((s) => {
+                  if (!s || !s.battle) return s;
+                  return {
+                    ...s,
+                    hp: newHp,
+                    mp: newMp,
+                    battle: { ...s.battle, hp: newEnemyHp },
+                  };
+                });
+              }}
+              onBattleEnd={(win, finalHp, finalMp) => {
+                endBattle(win, finalHp, finalMp);
+              }}
+              onFlee={() => {
+                battleAction("flee");
+              }}
+              onLog={(line) => push(line)}
+              onOpenShopModal={() => setShowShopModal(true)}
+              paused={showShopModal}
+            />
+          )}
+
           <div ref={scrollRef} className="crpg-scroll flex-1 overflow-y-auto px-4 py-3 text-[13px] leading-6">
             {log.map((line, i) => {
               const shown = line.shown ?? 0;
@@ -974,7 +1133,7 @@ function PlayPage() {
           <form onSubmit={(e)=>{e.preventDefault(); handle(input); setInput("");}}
                 className="border-t border-[#0f3a26] px-3 py-2 flex items-center gap-2 bg-black/40">
             <span className="text-[#00ff88] crpg-glow text-sm">{(state.name||"wanderer").toLowerCase()}@cloudrpg:~$</span>
-            <input autoFocus value={input} onChange={(e)=>setInput(e.target.value)} onKeyDown={onKeyDown} spellCheck={false}
+            <input ref={inputRef} autoFocus={!state.battle} value={input} onChange={(e)=>setInput(e.target.value)} onKeyDown={onKeyDown} spellCheck={false}
               className="flex-1 bg-transparent outline-none text-[#00ff88] crpg-glow text-sm placeholder-[#1f5a3a]"
               placeholder={state.battle ? "輸入：attack [N] / skill [N] / ult / item / flee" : "輸入指令… (help · skills · party · save · load)"} />
           </form>
@@ -1053,19 +1212,32 @@ function PlayPage() {
             )}
 
             <div className="mt-3">
-              <div className="text-[10px] tracking-widest text-[#3a8c5e] mb-1 border-b border-[#0f3a26] pb-1">▌ SKILLS</div>
-              <ul className="space-y-0.5">
-                {cls.normal.map((sk, i) => (
-                  <li key={sk.name} className="flex justify-between">
-                    <span className={cls.color}>{i+1}. {sk.name}</span>
-                    <span className="text-[#3a8c5e]">MP {sk.mp}</span>
-                  </li>
-                ))}
+              <div className="text-[10px] tracking-widest text-[#3a8c5e] mb-1 border-b border-[#0f3a26] pb-1 flex justify-between">
+                <span>▌ SKILLS (格鬥技能)</span>
+                <Link to="/market" className="text-[#ffd60a] hover:underline">🛒 買技能書/轉職</Link>
+              </div>
+              <ul className="space-y-0.5 text-[11px]">
+                <li className="flex justify-between">
+                  <span className={cls.color}>1. [R/L] {cls.normal[0].name}</span>
+                  <span className="text-[#00ff88]">已習得</span>
+                </li>
+                <li className="flex justify-between">
+                  <span className={state.learnedSkill2 ? cls.color : "text-[#3a8c5e]"}>
+                    2. [T/U] {state.learnedSkill2 ? cls.normal[1].name : "??? (技能書・卷一)"}
+                  </span>
+                  <span className="text-[#3a8c5e]">{state.learnedSkill2 ? "已習得" : "商店 600G"}</span>
+                </li>
+                <li className="flex justify-between">
+                  <span className={state.learnedSkill3 ? cls.color : "text-[#3a8c5e]"}>
+                    3. [Y/O] {state.learnedSkill3 ? cls.normal[2].name : "??? (技能書・卷二)"}
+                  </span>
+                  <span className="text-[#3a8c5e]">{state.learnedSkill3 ? "已習得" : "商店 1200G"}</span>
+                </li>
                 <li className="flex justify-between">
                   <span className={state.learnedUlt ? "text-[#ff4d6d] crpg-glow-red" : "text-[#3a8c5e]"}>
-                    ★ {state.learnedUlt ? cls.ultimate.name : "??? (未解鎖)"}
+                    ★ [Q/I] {state.learnedUlt ? cls.ultimate.name : "??? (終極奧義書)"}
                   </span>
-                  <span className="text-[#3a8c5e]">{state.learnedUlt ? `MP ${cls.ultimate.mp}` : "—"}</span>
+                  <span className="text-[#3a8c5e]">{state.learnedUlt ? "已習得" : "商店 2000G"}</span>
                 </li>
               </ul>
             </div>
@@ -1098,6 +1270,7 @@ function PlayPage() {
 
             <div className="mt-3 flex gap-1">
               <button onClick={saveGame} className="flex-1 px-2 py-1 border border-[#0f3a26] text-[#00ff88] hover:border-[#00ff88] hover:crpg-glow text-[11px]">[ SAVE ]</button>
+              <button onClick={() => setShowShopModal(true)} className="flex-1 px-2 py-1 border border-[#3a2f0a] text-[#ffd60a] hover:border-[#ffd60a] hover:crpg-glow-yellow text-[11px]">[ 🛒 黑市 ]</button>
               <button onClick={loadGame} className="flex-1 px-2 py-1 border border-[#0f3a26] text-[#00e5ff] hover:border-[#00e5ff] hover:crpg-glow-cyan text-[11px]">[ LOAD ]</button>
             </div>
           </div>

@@ -9,6 +9,8 @@ from typing import Optional
 
 router = APIRouter(prefix="/api/progress", tags=["progress"])
 
+INFINITE_GOLD = 999999999
+
 @router.post("/save")
 async def save_progress(
     data: dict,
@@ -24,7 +26,6 @@ async def save_progress(
         "log": [ { "t": "system", "text": "..." }, ... ]
     }
     """
-    # 驗證 token
     if not authorization:
         raise HTTPException(status_code=401, detail="Missing authorization header")
     
@@ -35,19 +36,25 @@ async def save_progress(
         print(f"❌ Token 解碼失敗: {e}")
         raise HTTPException(status_code=401, detail="Invalid token")
     
+    # decode_token 遇到過期 / 偽造的 token 會回傳 None（不會丟例外），沒擋的話下一行會變 500
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
     user_id = payload.get("sub")
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid token payload")
     
-    # 查詢用戶
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         print(f"❌ 用戶不存在: {user_id}")
         raise HTTPException(status_code=404, detail="User not found")
     
     try:
-        # 保存進度
-        user.game_progress = data.get("state", {})
+        state_data = dict(data.get("state", {}) or {})
+        if user.username and user.username.lower() == "admin":
+            state_data["gold"] = INFINITE_GOLD
+
+        user.game_progress = state_data
         user.game_log = data.get("log", [])
         user.last_save_at = datetime.utcnow()
         
@@ -55,14 +62,14 @@ async def save_progress(
         db.refresh(user)
         
         print(f"✅ 用戶 {user.username} 進度已保存")
-        print(f"   - State 字段數: {len(data.get('state', {}))}")
+        print(f"   - State 字段數: {len(state_data)}")
         print(f"   - Log 條數: {len(data.get('log', []))}")
         
         return {
             "status": "saved",
             "username": user.username,
             "saved_at": user.last_save_at.isoformat(),
-            "state_keys": list(data.get("state", {}).keys()),
+            "state_keys": list(state_data.keys()),
             "log_count": len(data.get("log", []))
         }
     except Exception as e:
@@ -86,7 +93,6 @@ async def load_progress(
         "last_save_at": "2026-05-24T..."
     }
     """
-    # 驗證 token
     if not authorization:
         raise HTTPException(status_code=401, detail="Missing authorization header")
     
@@ -97,21 +103,27 @@ async def load_progress(
         print(f"❌ Token 解碼失敗: {e}")
         raise HTTPException(status_code=401, detail="Invalid token")
     
+    # decode_token 遇到過期 / 偽造的 token 會回傳 None（不會丟例外），沒擋的話下一行會變 500
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
     user_id = payload.get("sub")
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid token payload")
     
-    # 查詢用戶
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         print(f"❌ 用戶不存在: {user_id}")
         raise HTTPException(status_code=404, detail="User not found")
     
-    # 返回進度
+    state_data = dict(user.game_progress or {})
+    if user.username and user.username.lower() == "admin" and state_data:
+        state_data["gold"] = INFINITE_GOLD
+
     response = {
         "status": "loaded",
         "username": user.username,
-        "state": user.game_progress or {},
+        "state": state_data,
         "log": user.game_log or [],
         "last_save_at": user.last_save_at.isoformat() if user.last_save_at else None
     }
@@ -137,13 +149,16 @@ async def clear_progress(
     except Exception as e:
         raise HTTPException(status_code=401, detail="Invalid token")
     
+    # decode_token 遇到過期 / 偽造的 token 會回傳 None（不會丟例外），沒擋的話下一行會變 500
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
     user_id = payload.get("sub")
     user = db.query(User).filter(User.id == user_id).first()
     
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    # 清除進度
     user.game_progress = {}
     user.game_log = []
     db.commit()

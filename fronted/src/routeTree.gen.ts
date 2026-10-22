@@ -15,6 +15,7 @@ import { Route as MarketRouteImport } from './routes/market'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as GuildRouteImport } from './routes/guild'
 import { Route as CodexRouteImport } from './routes/codex'
+import { Route as ArenaRouteImport } from './routes/arena'
 import { Route as IndexRouteImport } from './routes/index'
 
 const RegisterRoute = RegisterRouteImport.update({
@@ -47,6 +48,11 @@ const CodexRoute = CodexRouteImport.update({
   path: '/codex',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ArenaRoute = ArenaRouteImport.update({
+  id: '/arena',
+  path: '/arena',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -55,6 +61,7 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/arena': typeof ArenaRoute
   '/codex': typeof CodexRoute
   '/guild': typeof GuildRoute
   '/login': typeof LoginRoute
@@ -64,6 +71,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/arena': typeof ArenaRoute
   '/codex': typeof CodexRoute
   '/guild': typeof GuildRoute
   '/login': typeof LoginRoute
@@ -74,6 +82,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/arena': typeof ArenaRoute
   '/codex': typeof CodexRoute
   '/guild': typeof GuildRoute
   '/login': typeof LoginRoute
@@ -85,6 +94,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/arena'
     | '/codex'
     | '/guild'
     | '/login'
@@ -92,10 +102,19 @@ export interface FileRouteTypes {
     | '/play'
     | '/register'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/codex' | '/guild' | '/login' | '/market' | '/play' | '/register'
+  to:
+    | '/'
+    | '/arena'
+    | '/codex'
+    | '/guild'
+    | '/login'
+    | '/market'
+    | '/play'
+    | '/register'
   id:
     | '__root__'
     | '/'
+    | '/arena'
     | '/codex'
     | '/guild'
     | '/login'
@@ -106,6 +125,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ArenaRoute: typeof ArenaRoute
   CodexRoute: typeof CodexRoute
   GuildRoute: typeof GuildRoute
   LoginRoute: typeof LoginRoute
@@ -158,6 +178,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CodexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/arena': {
+      id: '/arena'
+      path: '/arena'
+      fullPath: '/arena'
+      preLoaderRoute: typeof ArenaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -170,6 +197,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ArenaRoute: ArenaRoute,
   CodexRoute: CodexRoute,
   GuildRoute: GuildRoute,
   LoginRoute: LoginRoute,
