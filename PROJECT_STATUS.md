@@ -270,7 +270,7 @@ cd ~/CloudRPG && tar xzf ~/backups/pre-fix-20261022-155657.tgz && sudo systemctl
 - [x] 實機測試塔 / PvP / 公會（使用者用自己的帳號測過，2026-10-23）
 - [x] 商城頂部不顯示金幣（`TopBar` 沒有畫出 `headerExtra`，第四輪修正）
 - [x] 實測喚醒頁：**Learner Lab 關閉後無法自動開機**（AWS API 全部被 `voc-cancel-cred` 拒絕），喚醒頁改成顯示「伺服器休眠中」（第 12 節）
-- [ ] 把新版喚醒 Lambda 部署上去（需要有效的 Learner Lab 憑證，步驟見 12.5）
+- [x] 新版喚醒 Lambda 已部署（2026-10-23）：遊戲正常時直接 302 轉址，lab 關閉時顯示休眠頁
 - [x] EC2 磁碟清理（apt 快取、舊 snap）+ apt 自動清理設定
 - [ ] EBS 根磁碟加大到 12 GB 以上（目前 6.7 GB，核心更新與 node_modules 很容易又吃滿）
 - [x] GitHub Actions CI（`.github/workflows/ci.yml`：pytest on Python 3.11 / 3.14 + 前端 `npm ci` + `npm run build` + TEMP-DEBUG 檢查；push 到 main 與 PR 時執行）
