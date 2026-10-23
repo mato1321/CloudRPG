@@ -1,5 +1,7 @@
 # ☁️ Cloud RPG
 
+[![CI](https://github.com/mato1321/CloudRPG/actions/workflows/ci.yml/badge.svg)](https://github.com/mato1321/CloudRPG/actions/workflows/ci.yml)
+
 > 賽博龐克終端機風格的雲端多人角色扮演遊戲：文字冒險 × 2D 街機格鬥，部署在 AWS（EC2 + RDS）。
 > A cyberpunk, terminal-styled multiplayer cloud RPG — text adventure meets 2D arcade fighting, deployed on AWS (EC2 + RDS).
 
@@ -146,6 +148,8 @@ cd backend
 pip install pytest httpx
 python -m pytest -q tests       # 使用暫存 SQLite，不會碰到 RDS
 ```
+
+push 到 `main` 或開 PR 時，GitHub Actions（[`.github/workflows/ci.yml`](.github/workflows/ci.yml)）會自動在 Python 3.11 / 3.14 跑 pytest，並用 Node 22 執行 `npm ci` + `npm run build`。
 
 **前端**
 
@@ -310,6 +314,8 @@ cd backend
 pip install pytest httpx
 python -m pytest -q tests       # uses a temporary SQLite database, never touches RDS
 ```
+
+On every push to `main` and on pull requests, GitHub Actions ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs pytest on Python 3.11 / 3.14 and `npm ci` + `npm run build` on Node 22.
 
 **Frontend**
 

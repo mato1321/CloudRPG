@@ -268,7 +268,8 @@ cd ~/CloudRPG && tar xzf ~/backups/pre-fix-20261022-155657.tgz && sudo systemctl
 - [ ] 實機測試塔 / PvP / 公會（需要登入；正式站只驗證了公開頁面）
 - [ ] 實測喚醒頁「EC2 關機 → 自動開機」完整流程
 - [ ] EC2 磁碟只剩約 720 MB：清 npm 快取（`npm cache clean --force`）或刪舊備份
-- [ ] GitHub Actions CI（pytest + `npm run build`）；Learner Lab 憑證會過期，自動部署建議改「EC2 定時 git pull」
+- [x] GitHub Actions CI（`.github/workflows/ci.yml`：pytest on Python 3.11 / 3.14 + 前端 `npm ci` + `npm run build` + TEMP-DEBUG 檢查；push 到 main 與 PR 時執行）
+- [ ] 自動部署：Learner Lab 憑證會過期，不適合放 GitHub Secrets，建議改「EC2 定時 git pull」
 - [ ] k6 / Locust 壓力測試腳本
 - [ ] Sentry：`requirements.txt` 加 `sentry-sdk[fastapi]`，`backend/.env` 設 `SENTRY_DSN`（程式已支援）
 - [ ] CloudWatch 告警（EC2 沒有 instance profile，記憶體指標需要 CloudWatch Agent）

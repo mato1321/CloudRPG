@@ -1,0 +1,77 @@
+# CI：後端 pytest + 前端正式版 build
+# 只做檢查，不自動部署（Learner Lab 憑證幾小時就過期，無法放在 GitHub Secrets 長期使用）
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend tests (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.14"] # 3.11 = 本機開發、3.14 = EC2 正式機
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pytest httpx
+
+      # 測試用暫存 SQLite（見 tests/conftest.py），不會連到 RDS
+      - name: Run pytest
+        run: python -m pytest -q tests
+
+  frontend:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: fronted
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22 # 與 EC2 相同
+          cache: npm
+          cache-dependency-path: fronted/package-lock.json
+
+      # 測試格鬥畫面時暫時加的 dev 掛鉤（標記 TEMP-DEBUG）不能進 main
+      - name: Check for leftover debug hooks
+        working-directory: .
+        run: |
+          if grep -rn "TEMP-DEBUG" fronted/src backend/app; then
+            echo "::error::Remove the TEMP-DEBUG lines before merging"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Build
+        run: npm run build
