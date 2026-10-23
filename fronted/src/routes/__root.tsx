@@ -9,6 +9,8 @@ import {
 } from "@tanstack/react-router";
 
 import appCss from "../styles.css?url";
+import { useEffect } from "react";
+import { installErrorReporting } from "../lib/telemetry";
 
 function NotFoundComponent() {
   return (
@@ -111,6 +113,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  useEffect(() => installErrorReporting(), []);
 
   return (
     <QueryClientProvider client={queryClient}>

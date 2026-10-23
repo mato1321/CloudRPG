@@ -5,13 +5,19 @@ import { useLocation, useNavigate, Link } from "@tanstack/react-router";
 const NAV = [
   { to: "/",          label: "LOBBY"  },
   { to: "/play",      label: "PLAY"   },
+  { to: "/tower",     label: "🗼 TOWER" },
+  { to: "/daily",     label: "📅 DAILY" },
+  { to: "/raid",      label: "🐉 RAID" },
+  { to: "/pvp",       label: "⚔ PVP" },
   { to: "/arena",     label: "🥊 ARENA" },
-  { to: "/market",    label: "MARKET" },
   { to: "/guild",     label: "GUILD"  },
+  { to: "/market",    label: "MARKET" },
+  { to: "/ranking",   label: "🏆 RANK" },
   { to: "/codex",     label: "CODEX"  },
 ];
 
-const PUBLIC_PATHS = new Set(["/", "/login", "/register", "/arena"]);
+// 不用登入就能看的頁面（PLAY 有訪客模式；每日挑戰 / 世界 Boss / 排行榜可以先看）
+const PUBLIC_PATHS = new Set(["/", "/login", "/register", "/arena", "/play", "/daily", "/raid", "/ranking", "/codex"]);
 
 // ✅ 導出函數
 export function readAuth() {
@@ -73,12 +79,13 @@ export function TopBar({ extra = null }) {
         </span>
         <span className="text-[10px] text-[#3a8c5e] border border-[#0f3a26] px-1 py-[1px]">v0.9-beta</span>
       </Link>
-      <nav className="flex items-center gap-1 ml-2">
+      <nav className="flex flex-wrap items-center gap-0.5 ml-2">
         {NAV.map(n => (
           <Link
             key={n.to}
             to={n.to}
-            className="px-2 py-1 text-[#3a8c5e] hover:text-[#00ff88] hover:crpg-glow border border-transparent hover:border-[#0f3a26] transition"
+            className="px-1.5 py-1 text-[#3a8c5e] hover:text-[#00ff88] hover:crpg-glow border border-transparent hover:border-[#0f3a26] transition"
+            activeProps={{ className: "text-[#00ff88] crpg-glow border-[#0f3a26]" }}
           >
             [{n.label}]
           </Link>

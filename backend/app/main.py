@@ -1,24 +1,38 @@
-# @ts-nocheck
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 import logging
+
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+from app.core.config import settings
+from app.core.ratelimit import client_ip, limiter
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-from app.db.database import Base, engine
-from app.models.user import User
-from app.models.character import Character
-from app.api import auth, character, battle
-from app.api import progress  # ⭐ 導入 progress
+# 選填：設定 SENTRY_DSN 後，後端例外會送到 Sentry
+if settings.SENTRY_DSN:
+    try:
+        import sentry_sdk
 
-# 創建所有表
+        sentry_sdk.init(dsn=settings.SENTRY_DSN, traces_sample_rate=0.05)
+        logger.info("Sentry enabled")
+    except ImportError:
+        logger.warning("SENTRY_DSN 已設定，但沒有安裝 sentry-sdk")
+
+from app.db.database import Base, engine
+from app.models import game as _game_models  # noqa: F401 讓 create_all 建立新資料表
+from app.models.character import Character  # noqa: F401
+from app.models.user import User  # noqa: F401
+from app.api import auth, character, combat, modes, profile, progress, social
+
+# 創建所有表（只會新增不存在的表，不會動到既有資料）
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="Cloud RPG API",
     description="後端服務",
-    version="0.1.0"
+    version="0.2.0"
 )
 
 # CORS 配置
@@ -30,31 +44,42 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 日誌中間件
+
+# 全域限流 + 請求日誌
 @app.middleware("http")
-async def log_requests(request, call_next):
-    logger.info(f"📥 {request.method} {request.url.path}")
+async def guard_requests(request: Request, call_next):
+    path = request.url.path
+    if path.startswith("/api/") and not limiter.hit(f"ip:{client_ip(request)}", settings.RATE_LIMIT_PER_10S, 10):
+        return JSONResponse(status_code=429, content={"detail": "請求太頻繁，請稍後再試"})
     try:
         response = await call_next(request)
-        logger.info(f"📤 {response.status_code} {request.url.path}")
+        if response.status_code >= 400:
+            logger.info("%s %s -> %s", request.method, path, response.status_code)
         return response
     except Exception as e:
         logger.error(f"❌ 錯誤: {str(e)}", exc_info=True)
         raise
 
+
 # 註冊路由
 app.include_router(auth.router)
 app.include_router(character.router)
-app.include_router(battle.router)
-app.include_router(progress.router)  # ⭐ 必須在這裡！
+app.include_router(progress.router)
+app.include_router(profile.router)
+app.include_router(combat.router)
+app.include_router(modes.router)
+app.include_router(social.router)
+
 
 @app.get("/")
 async def root():
     return {"message": "Cloud RPG Backend"}
 
+
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}
+
 
 if __name__ == "__main__":
     import uvicorn

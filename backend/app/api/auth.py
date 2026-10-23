@@ -1,15 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from app.core.security import hash_password, verify_password, create_access_token
 from app.db.database import get_db
 from app.models.user import User
 from app.schemas.auth import RegisterRequest, LoginRequest, TokenResponse
+from app.core.ratelimit import client_ip, enforce
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 @router.post("/register", response_model=TokenResponse)
-async def register(req: RegisterRequest, db: Session = Depends(get_db)):
+async def register(req: RegisterRequest, request: Request, db: Session = Depends(get_db)):
     """註冊新帳號"""
+    enforce(f"register:{client_ip(request)}", 5, 600, "註冊太頻繁，請稍後再試")
     
     # 檢查用戶是否已存在
     existing = db.query(User).filter(User.username == req.username).first()
@@ -37,8 +39,10 @@ async def register(req: RegisterRequest, db: Session = Depends(get_db)):
     )
 
 @router.post("/login", response_model=TokenResponse)
-async def login(req: LoginRequest, db: Session = Depends(get_db)):
+async def login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
     """登入"""
+    # 防暴力破解：同一個 IP 每分鐘最多 10 次
+    enforce(f"login:{client_ip(request)}", 10, 60, "登入嘗試太多次，請一分鐘後再試")
     
     # 查找用戶
     user = db.query(User).filter(User.username == req.username).first()

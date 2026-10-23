@@ -4,6 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import { Shell, Stat, readAuth, clearAuth } from "../components/crpg/Shell";
 import { StoryBattleArena } from "../components/crpg/StoryBattleArena";
 import { ShopModal } from "../components/crpg/ShopModal";
+import { CLASSES, defaultParty } from "../lib/classes";
+import { api } from "../lib/api";
+import { ChatPanel } from "../components/crpg/ChatPanel";
+import { BindAccountModal } from "../components/crpg/BindAccountModal";
+import { RARITY_COLOR, statText } from "../lib/gear";
 
 export const Route = createFileRoute("/play")({
   // ✅ 修復水合錯誤：整頁狀態來自 localStorage，伺服器端渲染一定對不上，改成只在瀏覽器渲染
@@ -37,68 +42,7 @@ const PFX = {
 
 /* ───────────── CLASSES ───────────── */
 
-const CLASSES = {
-  warrior: {
-    id: "warrior", name: "戰士", en: "Warrior", icon: "⚔",
-    color: "text-[#ff4d6d] crpg-glow-red",
-    border: "border-[#3a0f1c] hover:border-[#ff4d6d]",
-    desc: "鋼鐵之軀，近戰爆發。以血肉碾碎眼前的一切。",
-    stats: { hp:220, hpMax:220, mp:60, mpMax:60, atk:25 },
-    skillType: "battle",
-    attacks: [
-      { name:"普通斬擊", mul:1.0 },
-      { name:"重劈",     mul:1.4 },
-    ],
-    normal: [
-      { name:"裂地斬",  mp:15, mul:1.6 },
-      { name:"狂戰衝擊", mp:18, mul:1.8 },
-      { name:"鋼鐵粉碎", mp:20, mul:2.0 },
-    ],
-    ultimate:    { name:"滅世斷界斬", mp:40, mul:4.5 },
-    weaponBasic: { id:"weapon_basic", name:"銀風鐵劍",     atk:15, price:500 },
-    weaponAdv:   { id:"weapon_adv",   name:"日蝕殞落之劍", atk:35, price:3000 },
-  },
-  mage: {
-    id: "mage", name: "法師", en: "Mage", icon: "✦",
-    color: "text-[#a78bfa] crpg-glow-cyan",
-    border: "border-[#1f1a4a] hover:border-[#a78bfa]",
-    desc: "高魔詠唱者。以遠程法術撕裂時空與敵陣。",
-    stats: { hp:120, hpMax:120, mp:220, mpMax:220, atk:15 },
-    skillType: "magic",
-    attacks: [
-      { name:"杖擊",     mul:1.0 },
-      { name:"奧術飛彈", mul:1.3 },
-    ],
-    normal: [
-      { name:"雷霆脈衝", mp:18, mul:1.7, hint:"引發連鎖閃電" },
-      { name:"虛空火球", mp:20, mul:1.9, hint:"魔力爆發" },
-      { name:"極光崩解", mp:22, mul:2.1 },
-    ],
-    ultimate:    { name:"禁忌・星界崩壞", mp:50, mul:5.0 },
-    weaponBasic: { id:"weapon_basic", name:"刻印法杖",     atk:15, price:500 },
-    weaponAdv:   { id:"weapon_adv",   name:"全世操縱之杖", atk:35, price:3000 },
-  },
-  priest: {
-    id: "priest", name: "牧師", en: "Priest", icon: "✚",
-    color: "text-[#ffd60a] crpg-glow-yellow",
-    border: "border-[#3a2f0a] hover:border-[#ffd60a]",
-    desc: "神諭之手。在傷害與恢復之間取得神聖平衡。",
-    stats: { hp:160, hpMax:160, mp:180, mpMax:180, atk:12 },
-    skillType: "holy",
-    attacks: [
-      { name:"聖珠衝擊", mul:1.0 },
-      { name:"懲戒之光", mul:1.3 },
-    ],
-    normal: [
-      { name:"聖光制裁", mp:16, mul:1.6 },
-      { name:"靈魂祈禱", mp:18, mul:1.4, heal:30 },
-      { name:"神聖脈動", mp:20, mul:1.5, heal:40 },
-    ],
-    ultimate:    { name:"終焉聖域", mp:45, mul:4.2, heal:80 },
-    weaponBasic: { id:"weapon_basic", name:"純潔寶珠", atk:15, price:500 },
-    weaponAdv:   { id:"weapon_adv",   name:"虛空之眼", atk:35, price:3000 },
-  },
-};
+/* 職業設定移到 lib/classes.ts（各遊戲模式共用） */
 
 /* ───────────── STORY ENGINE ───────────── */
 
@@ -133,94 +77,31 @@ const ITEM_LABEL = {
 };
 
 const SAVE_KEY = "cloud-rpg-save";
-// ⭐ 新增：進度同步配置
-const PROGRESS_SYNC_INTERVAL = 30000;  // 30 秒同步一次
-const API_URL = import.meta.env.VITE_API_URL || (typeof window !== "undefined" ? (window.location.port === "" || window.location.port === "80" ? window.location.origin : `${window.location.protocol}//${window.location.hostname}:8000`) : "http://localhost:8000");
+const PROGRESS_SYNC_INTERVAL = 30000;  // 30 秒同步一次劇情進度
 
-// ⭐ 新增：進度同步到雲端
-async function syncProgressToCloud(state, log, auth) {
-  if (!state || !auth?.token) {
-    return false;
-  }
-  
+// 「經濟」欄位（金幣、物品、等級、裝備…）由伺服器說了算；本地只保存劇情欄位
+const ECON_KEYS = ["klass","klassName","level","exp","expMax","gold","atk","hpMax","mpMax","inv","learnedSkill2","learnedSkill3","learnedUlt","equipped","gear","equippedGear","gearStats","weaponTier","weaponPlus","rarityGlow","bossesDefeated"];
+const pickEcon = (p) => Object.fromEntries(ECON_KEYS.filter((k) => p && k in p).map((k) => [k, p[k]]));
+
+// 訪客可以玩的範圍：第一章（打倒雜魚老大）。之後要綁定帳號才能繼續
+const GUEST_SCENES = new Set(["classroom","portal","wasteland","wasteland2","village_burning","flee_fail","battle_minions","village_saved"]);
+
+async function syncProgressToCloud(state, log, keepalive = false) {
   try {
-    console.log("📤 同步進度到雲端...");
-    const res = await fetch(`${API_URL}/api/progress/save`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${auth.token}`
-      },
-      body: JSON.stringify({
-        state,
-        log: log.map(l => ({ ...l, shown: l.text.length }))
-      })
+    await api("/api/progress/save", {
+      body: { state, log: log.slice(-300).map((l) => ({ ...l, shown: l.text.length })) },
+      keepalive,
     });
-    
-    if (res.status === 401) return "expired";
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({ status: res.status }));
-      console.log("❌ 同步失敗:", data);
-      return false;
-    }
-    
-    const data = await res.json();
-    console.log("✅ 進度已上傳:", data);
     return true;
-  } catch (err) {
-    console.log("❌ 網路錯誤:", err.message);
-    return false;
+  } catch (e) {
+    return e.status === 401 ? "expired" : false;
   }
 }
-
-// ⭐ 新增：從雲端讀取進度
-async function loadProgressFromCloud(auth) {
-  if (!auth?.token) {
-    return null;
-  }
-  
-  try {
-    console.log("📥 從雲端讀取進度...");
-    const res = await fetch(`${API_URL}/api/progress/load`, {
-      method: "GET",
-      headers: {
-        "Authorization": `Bearer ${auth.token}`
-      }
-    });
-    
-    if (res.status === 401) return { expired: true };
-    if (!res.ok) {
-      console.log("❌ 讀取失敗");
-      return null;
-    }
-    
-    const data = await res.json();
-    console.log("✅ 已讀取雲端進度:", data);
-    return {
-      state: data.state,
-      log: data.log || [],
-      savedAt: data.last_save_at
-    };
-  } catch (err) {
-    console.log("⚠️ 讀取雲端進度出錯:", err.message);
-    return null;
-  }
-}
-
 
 function readSave() {
   if (typeof window === "undefined") return null;
   try { const raw = localStorage.getItem(SAVE_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; }
 }
-
-const CHAT_NAMES = ["NeoHunter","CyberCat","Zero_77","GhostByte","ByteWitch","R00t_sama","KaiNova","Pix3l_Ko","n3on_kn1ght"];
-const CHAT_MSGS = [
-  "有人要打王嗎？","剛刷到稀有裝！","新手求組隊","黑市更新了！",
-  "哪裡刷哥布林快？","誰賣高級技能書","求大佬帶","公爵我打不過 Q_Q",
-  "牧師快來奶我","戰士衝啊","法師補補水","聽說有不死圖騰？",
-  "終於 LV 30 了！","Administrator 是什麼鬼？","聽說有人通關了！",
-  "大家小心 glitch event","三巨頭爆率太低啦","???終端機是真的存在嗎",
-];
 
 const PIXEL_AVATAR = {
   warrior: `
@@ -284,6 +165,7 @@ const SCENES = {
       { t:"world",  text:"衛兵丟下少量物資後揚長而去：「到達村莊後隱姓埋名，別提起任何過往，大概還是能活著。」" },
       { t:"system", text:"[LOOT] 草藥 ×3 · 很小罐的魔力瓶 ×1 · 很廢的武器 ×3" },
     ],
+    claim: "wasteland_loot",
     onEnter: (s) => ({ inv: { ...s.inv, herb:(s.inv.herb||0)+3, mana:(s.inv.mana||0)+1, junk:3 }, quest:"前往最近的村莊" }),
     choices: [
       { cmd:"walk",     label:"沿著衛兵指的路走向村莊", go:"village_burning" },
@@ -331,6 +213,7 @@ const SCENES = {
       { t:"system", text:"[UNLOCK] 哥布林洞 · 羅劫公爵大凶宅 · 冥盡洞 · 天光島嶼" },
       { t:"glitch", text:"……（無人注意的角落，雜魚老大屍體的眼中閃過幾行字：C:\\mato\\AIclub.exe ?  <Y/N>）" },
     ],
+    claim: "village_sword",
     onEnter: (s) => ({
       inv: { ...s.inv, sword: (s.inv.sword || 0) + 1 },
       flags: { ...s.flags, villageSaved: true },
@@ -460,9 +343,7 @@ function PlayPage() {
 
   const [state, setState] = useState(() => {
     if (saved?.state?.klass) {
-      const s = { name: "WANDERER_77", sceneId: "classroom", battle: null, ...saved.state };
-      if (isAdminAccount(s.name)) s.gold = INFINITE_GOLD;
-      return s;
+      return { name: "WANDERER_77", sceneId: "classroom", battle: null, ...saved.state };
     }
     return null;
   });
@@ -472,19 +353,22 @@ function PlayPage() {
   const [hi, setHi] = useState(-1);
   const scrollRef = useRef(null);
   const skipIntroRef = useRef(!!saved && hasKlass);
-  const chatRef = useRef(null);
-  const [chatInput, setChatInput] = useState("");
   const [showShopModal, setShowShopModal] = useState(false);
-  const [shopToast, setShopToast] = useState(null);
-  const [showTerminal, setShowTerminal] = useState(false);
+  const [shopTab, setShopTab] = useState("shop");
+  const [bindPrompt, setBindPrompt] = useState(null);
+  // 目前這場故事戰鬥的伺服器憑證、開始時間、文字指令模式用掉的道具
+  const battleRef = useRef({ id: null, start: 0, items: { herb: 0, mana: 0, totem: 0 } });
 
-    // ⭐ 新增：認證信息狀態
   const [auth, setAuth] = useState(null);
+  const online = !!auth?.token;
   const navigate = useNavigate();
   const inputRef = useRef(null);
 
   useEffect(() => {
     setAuth(readAuth());
+    const sync = () => setAuth(readAuth());
+    window.addEventListener("cloud-rpg-auth-change", sync);
+    return () => window.removeEventListener("cloud-rpg-auth-change", sync);
   }, []);
 
   // ✅ Token 過期（後端回 401）→ 清掉登入狀態並回登入頁，本機存檔保留
@@ -494,108 +378,106 @@ function PlayPage() {
     navigate({ to: "/login" });
   }
 
-  // ⭐ 新增：登入後從雲端讀取進度
+  function applyProfile(p) {
+    if (!p) return;
+    setState((s) => (s ? { ...s, ...pickEcon(p) } : s));
+  }
+
+  function openShop(tab = "shop") {
+    setShopTab(tab);
+    setShowShopModal(true);
+  }
+
+  // ⭐ 登入後讀取雲端：劇情用較新的那份，金幣 / 物品 / 等級一律以伺服器為準
   useEffect(() => {
-    // ✅ 修復：只在初次進入遊戲時讀一次（picking 變成 false）
     if (!auth?.token) return;
-
+    let cancelled = false;
     (async () => {
-      const cloudProgress = await loadProgressFromCloud(auth);
-      if (cloudProgress?.expired) return onAuthExpired();
+      let cloud;
+      try {
+        cloud = await api("/api/progress/load");
+      } catch (e) {
+        if (e.status === 401) onAuthExpired();
+        return;
+      }
+      if (cancelled) return;
 
-      // ✅ 本機存檔比雲端新（例如離線玩了一段）就保留本機，不被舊的雲端進度蓋掉
-      // （用進頁面當下的快照比較，因為 auto-save 一掛載就會刷新 localStorage 的 ts）
-      const local = savedRef.current;
-      const cloudTs = cloudProgress?.savedAt ? Date.parse(cloudProgress.savedAt + "Z") : 0;
-      if (local?.state?.klass && (local.ts || 0) > cloudTs) {
-        console.log("💾 本機進度較新，保留本機進度");
+      if (!cloud.hasProfile) {
+        // 帳號還沒有角色：本機有訪客進度 → 匯入（伺服器只承認第一章可驗證的獎勵）
+        const local = readSave();
+        if (local?.state?.klass) {
+          try {
+            const r = await api("/api/profile/import-guest", {
+              body: { klass: local.state.klass, claims: local.state.flags?.claims || [], beatMinions: !!local.state.flags?.villageSaved },
+            });
+            if (cancelled) return;
+            setState((s) => ({ ...(s || local.state), name: auth.user, ...pickEcon(r.profile) }));
+            setPicking(false);
+            push({ t: "system", text: r.imported ? "[SYS] 💾 訪客進度已綁定到帳號，之後會自動同步到雲端。" : "[SYS] 已載入帳號資料。" });
+          } catch (e) {
+            push({ t: "system", text: `[!!] 綁定失敗：${e.message}` });
+          }
+        } else {
+          setState(null);
+          setPicking(true);
+        }
         return;
       }
 
-      if (cloudProgress?.state && Object.keys(cloudProgress.state).length > 0) {
-        console.log("🔄 使用雲端進度");
-        const loadedState = { ...cloudProgress.state };
-        if (isAdminAccount(auth?.user || loadedState.name)) {
-          loadedState.gold = INFINITE_GOLD;
-        }
-        setState(loadedState);
-        setLog(cloudProgress.log);
-        skipIntroRef.current = true;
-        if (loadedState.klass) setPicking(false);
-      } else {
-        console.log("💾 使用本地 localStorage 進度");
-      }
+      const cloudTs = cloud.last_save_at ? Date.parse(cloud.last_save_at + "Z") : 0;
+      const snap = savedRef.current;
+      const useLocal = snap?.state?.klass === cloud.state.klass && (snap?.ts || 0) > cloudTs && !!cloud.state.sceneId;
+      const story = useLocal ? snap.state : cloud.state;
+      setState({
+        name: auth.user,
+        sceneId: "classroom",
+        flags: {},
+        party: defaultParty(cloud.state.klass),
+        quest: "醒來。",
+        ...story,
+        ...pickEcon(cloud.state),
+        battle: null,
+      });
+      if (!useLocal) setLog((cloud.log || []).map((l) => ({ ...l, shown: l.text?.length ?? 0 })));
+      // 存檔停在戰鬥場景時重新觸發戰鬥（要重新向伺服器領憑證）
+      skipIntroRef.current = !!story.sceneId && !SCENES[story.sceneId]?.battle;
+      setPicking(false);
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [auth?.token]);
 
-
-  // ⭐ 新增：自動同步進度到雲端（每 30 秒）
+  // ⭐ 自動同步劇情進度到雲端（每 30 秒）
   useEffect(() => {
     if (!state || !auth?.token) return;
-    
     const syncInterval = setInterval(async () => {
-      if ((await syncProgressToCloud(state, log, auth)) === "expired") onAuthExpired();
+      if ((await syncProgressToCloud(state, log)) === "expired") onAuthExpired();
     }, PROGRESS_SYNC_INTERVAL);
-    
     return () => clearInterval(syncInterval);
   }, [state, log, auth?.token]);
 
-  // ⭐ 新增：頁面卸載時同步進度
+  // ⭐ 關閉頁面時同步（keepalive：頁面關掉後請求也會送完）
   useEffect(() => {
-    const handleBeforeUnload = async () => {
-      if (state && auth?.token) {
-        await syncProgressToCloud(state, log, auth);
-      }
+    const handleBeforeUnload = () => {
+      if (state && auth?.token) syncProgressToCloud(state, log, true);
     };
-    
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [state, log, auth?.token]);
 
-
-
-
   useEffect(() => {
     if (!state) return;
     const a = readAuth();
-    const isAdm = isAdminAccount(a?.user || state.name);
-    if ((a?.user && state.name !== a.user) || (isAdm && state.gold < INFINITE_GOLD)) {
-      setState((s) => ({
-        ...s,
-        name: a?.user || s.name,
-        gold: isAdm ? INFINITE_GOLD : s.gold,
-      }));
-    }
+    if (a?.user && state.name !== a.user) setState((s) => ({ ...s, name: a.user }));
     // eslint-disable-next-line
   }, [state ? true : false, auth?.user]);
 
-  // World chat
-  const [chat, setChat] = useState(() => Array.from({ length: 5 }, (_, i) => ({
-    user: CHAT_NAMES[i % CHAT_NAMES.length], msg: CHAT_MSGS[i % CHAT_MSGS.length],
-  })));
-  useEffect(() => {
-    const id = setInterval(() => {
-      setChat((c) => [...c.slice(-40), {
-        user: CHAT_NAMES[Math.floor(Math.random()*CHAT_NAMES.length)],
-        msg:  CHAT_MSGS[Math.floor(Math.random()*CHAT_MSGS.length)] }]);
-    }, 4500);
-    return () => clearInterval(id);
-  }, []);
-  useEffect(() => { if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight; }, [chat]);
-
-  function sendChat(e) {
-    e?.preventDefault?.();
-    const msg = chatInput.trim();
-    if (!msg) return;
-    setChat((c) => [...c.slice(-40), { user: state?.name || "you", msg, self: true }]);
-    setChatInput("");
-  }
-
-  // Auto-save
+  // Auto-save（本機）
   useEffect(() => {
     if (!state) return;
     try { localStorage.setItem(SAVE_KEY, JSON.stringify({ state, log, ts: Date.now() })); } catch {}
-  }, [state?.sceneId, state?.klass, state?.level, state?.gold, state?.hp, state?.mp, state?.atk, state?.learnedSkill2, state?.learnedSkill3, state?.learnedUlt, state?.inv, state?.equipped]);
+  }, [state?.sceneId, state?.klass, state?.level, state?.gold, state?.hp, state?.mp, state?.atk, state?.learnedSkill2, state?.learnedSkill3, state?.learnedUlt, state?.inv, state?.equipped, state?.flags]);
 
   const scene = state ? SCENES[state.sceneId] : null;
 
@@ -605,6 +487,16 @@ function PlayPage() {
     if (skipIntroRef.current) { skipIntroRef.current = false; return; }
     let patch = {};
     if (scene.onEnter) patch = scene.onEnter(state) || {};
+    if (scene.claim) {
+      if (online) {
+        // 劇情撿到的東西由伺服器發放（每個帳號只能領一次）
+        for (const k of ECON_KEYS) delete patch[k];
+        api("/api/story/claim", { body: { reward_id: scene.claim } }).then((r) => applyProfile(r.profile)).catch(() => {});
+      } else {
+        const claims = [...new Set([...(state.flags?.claims || []), scene.claim])];
+        patch.flags = { ...(state.flags || {}), ...(patch.flags || {}), claims };
+      }
+    }
     const intro = scene.intro || [];
     const dyn = scene.dynamic ? scene.dynamic({ ...state, ...patch }) : [];
     setLog((l) => [...l,
@@ -617,6 +509,15 @@ function PlayPage() {
         { t:"battle", text:`遭遇：${e.name}！  [已啟動 2D 街機格鬥決戰模式]` },
         { t:"system", text:"鍵盤操作：[WASD]移動/格擋 · [F/J]輕擊 · [G/K]重擊 · [R/L]技能1 · [T/U]技能2 · [Y/O]技能3 · [Q/I]奧義 · [H]草藥" }]);
       setState((s) => ({ ...s, ...patch, battle: { key: scene.battle, hp: e.hp * 3, hpMax: e.hp * 3 } }));
+      battleRef.current = { id: null, start: Date.now(), items: { herb: 0, mana: 0, totem: 0 } };
+      if (online) {
+        api("/api/battle/start", { body: { mode: "story", key: scene.battle } })
+          .then((b) => { battleRef.current.id = b.battle_id; })
+          .catch((err) => {
+            push({ t: "system", text: `[!!] ${err.message}` });
+            setTimeout(() => gotoScene(scene.loseGo), 400);
+          });
+      }
     } else {
       const choices = (scene.choices || []).filter((c) => !c.need || c.need({ ...state, ...patch }));
       if (choices.length) {
@@ -626,6 +527,10 @@ function PlayPage() {
         ]);
       }
       if (Object.keys(patch).length) setState((s) => ({ ...s, ...patch }));
+      // 訪客打倒第一個 Boss → 提示綁定帳號
+      if (!online && state.sceneId === "village_saved") {
+        setTimeout(() => setBindPrompt("你打倒了第一個 Boss！"), 2500);
+      }
     }
   }, [state?.sceneId, picking]);
 
@@ -639,7 +544,7 @@ function PlayPage() {
     setLog((l) => [...l, ...lines.map((ln) => ({ ...ln, shown: 0 }))]);
   }
 
-  // Typewriter
+  // 打字機效果（比原本快一倍；按「跳過」或輸入 skip 立刻顯示全部）
   useEffect(() => {
     const id = setInterval(() => {
       setLog((cur) => {
@@ -647,24 +552,39 @@ function PlayPage() {
         if (i === -1) return cur;
         const next = cur.slice();
         const line = next[i];
-        const step = Math.max(2, Math.ceil(line.text.length / 50));
+        const step = Math.max(3, Math.ceil(line.text.length / 25));
         next[i] = { ...line, shown: Math.min(line.text.length, (line.shown ?? 0) + step) };
         return next;
       });
-    }, 22);
+    }, 16);
     return () => clearInterval(id);
   }, []);
 
-  function chooseClass(id) {
+  function skipText() {
+    setLog((cur) => cur.map((l) => ({ ...l, shown: l.text.length })));
+  }
+  const typing = log.some((l) => (l.shown ?? 0) < l.text.length);
+
+  async function chooseClass(id) {
     const init = initialStateFor(id);
     const a = readAuth();
-    const initial = { name: a?.user || "WANDERER_77", sceneId: "classroom", battle: null, ...init };
+    let econ = {};
+    if (a?.token) {
+      try {
+        econ = pickEcon((await api("/api/profile/create", { body: { klass: id } })).profile);
+      } catch (e) {
+        if (e.status === 409) econ = pickEcon((await api("/api/profile")).profile);
+        else return push({ t: "system", text: `[!!] ${e.message}` });
+      }
+    }
+    const initial = { name: a?.user || "WANDERER_77", sceneId: "classroom", battle: null, ...init, ...econ };
     setState(initial);
     const partyNames = init.party.map((p) => `${p.name}(${CLASSES[p.klass].name}·AI)`).join("、");
     setLog([
       { t:"system", text:`[SYS] 職業已選定並鎖定：${CLASSES[id].name} (${CLASSES[id].en}) — 選定後不可更改（若需轉職請至 [MARKET] 黑市購買「轉職聖典」）`, shown:0 },
       { t:"system", text:`[MATCHMAKING] 搜尋線上玩家中…未滿 3 人，由 AI 補位。`, shown:0 },
       { t:"system", text:`[PARTY] 你的三人小隊：${initial.name} ＋ ${partyNames}`, shown:0 },
+      ...(a?.token ? [] : [{ t:"system", text:"[SYS] 訪客模式：免註冊直接開玩！打倒第一個 Boss 後可以綁定帳號保存進度。", shown:0 }]),
     ]);
     skipIntroRef.current = false;
     setPicking(false);
@@ -673,10 +593,12 @@ function PlayPage() {
   function saveGame() {
     const flat = log.map((l) => ({ ...l, shown: l.text.length }));
     try { localStorage.setItem(SAVE_KEY, JSON.stringify({ state, log: flat, ts: Date.now() }));
-      push({ t:"system", text:"[SYS] 遊戲已成功存檔" });
+      push({ t:"system", text: online ? "[SYS] 遊戲已存檔（雲端每 30 秒自動同步）" : "[SYS] 遊戲已存檔到這台電腦（綁定帳號後可雲端保存）" });
+      if (online) syncProgressToCloud(state, log);
     } catch { push({ t:"system", text:"[SYS] 存檔失敗" }); }
   }
   function loadGame() {
+    if (online) return push({ t:"system", text:"[SYS] 帳號進度以雲端為準，重新整理頁面即可載入最新進度。" });
     const s = readSave();
     if (!s) return push({ t:"system", text:"[SYS] 找不到存檔" });
     skipIntroRef.current = true;
@@ -686,6 +608,11 @@ function PlayPage() {
   }
 
   function gotoScene(id, effect) {
+    if (!online && !GUEST_SCENES.has(id)) {
+      push({ t: "system", text: "[SYS] 🔒 接下來的冒險需要帳號才能保存（免費、10 秒完成）。" });
+      setBindPrompt("想繼續冒險嗎？");
+      return;
+    }
     let patch = effect ? (effect(state) || {}) : {};
     setState((s) => ({ ...s, ...patch, sceneId: id, battle: null }));
   }
@@ -707,10 +634,67 @@ function PlayPage() {
     });
   }
 
-  function endBattle(win, finalHp = null, finalMp = null) {
+  function endBattle(win, finalHp = null, finalMp = null, stats = null) {
     if (!state?.battle) return;
     const enemy = ENEMIES[state.battle.key];
     const next = win ? scene.winGo : scene.loseGo;
+    const sc = scene;
+    if (online) {
+      const b = battleRef.current;
+      const id = b.id;
+      b.id = null;
+      const items = { ...b.items };
+      for (const k of ["herb", "mana", "totem"]) items[k] = (items[k] || 0) + (stats?.itemsUsed?.[k] || 0);
+      setState((s) => (s ? { ...s, battle: null, hp: finalHp ?? s.hp, mp: finalMp ?? s.mp, flags: { ...(s.flags || {}), tutorialDone: true } } : s));
+      if (!id) {
+        push({ t: "system", text: "[!!] 戰鬥憑證遺失（可能是網路問題），本場不計。" });
+        setTimeout(() => gotoScene(sc.loseGo), 50);
+        return;
+      }
+      api("/api/battle/finish", {
+        body: {
+          battle_id: id,
+          win,
+          duration_ms: stats?.durationMs ?? Date.now() - b.start,
+          damage: stats?.damage ?? 0,
+          hp_left: Math.max(0, finalHp ?? state.hp),
+          max_combo: stats?.maxCombo ?? 0,
+          items_used: items,
+        },
+      })
+        .then((r) => {
+          const rw = r.rewards || {};
+          if (win) {
+            const drops = Object.keys(rw.items || {}).map((k) => STONE_LABEL[k] || ITEM_LABEL[k] || k);
+            push({ t: "battle", text: `${enemy.name} 被擊敗！` },
+                 { t: "system", text: `[REWARD] +${rw.xp} EXP · +${rw.gold} GOLD${drops.length ? ` · 獲得 ${drops.join("、")}` : ""}` });
+            if (enemy.joke) push({ t: "player", text: "三人：不是，這麼廢的嗎？" });
+          } else {
+            push({ t: "battle", text: "你戰敗了……在據點恢復一半體力後重新出發。" });
+          }
+          for (const g of rw.gear || []) push({ t: "relic", text: `[LOOT] 🎁 ${g.name}（${statText(g.stats)}）→ 輸入 shop 打開「裝備背包」穿上它！` });
+          if (r.levelUps > 0) push({ t: "system", text: `▲ LEVEL UP! → LV ${r.profile.level}（HP、MP、ATK 全面提升）` });
+          setState((s) => {
+            if (!s) return s;
+            const p = r.profile;
+            const up = r.levelUps > 0;
+            return {
+              ...s,
+              ...pickEcon(p),
+              hp: up ? p.hpMax : win ? Math.min(p.hpMax, Math.max(1, finalHp ?? s.hp)) : Math.max(1, Math.floor(p.hpMax / 2)),
+              mp: up ? p.mpMax : Math.min(p.mpMax, finalMp ?? s.mp),
+            };
+          });
+          setTimeout(() => gotoScene(next), 50);
+        })
+        .catch((e) => {
+          push({ t: "system", text: `[!!] 結算失敗：${e.message}` });
+          setState((s) => (s ? { ...s, hp: Math.max(1, Math.floor(s.hpMax / 2)) } : s));
+          setTimeout(() => gotoScene(sc.loseGo), 50);
+        });
+      return;
+    }
+    setState((s) => (s ? { ...s, flags: { ...(s.flags || {}), tutorialDone: true } } : s));
     if (win) {
       push({ t:"battle", text:`${enemy.name} 被擊敗！` },
            { t:"system", text:`[REWARD] +${enemy.xp} EXP · +${enemy.gold} GOLD${enemy.drop ? ` · 獲得 ${STONE_LABEL[enemy.drop]}` : ""}` });
@@ -868,6 +852,7 @@ function PlayPage() {
       if (!state.inv.herb) return push({ t:"system", text:"沒有草藥。" });
       const heal = 60;
       push({ t:"system", text:`使用草藥，恢復 ${heal} HP。` });
+      battleRef.current.items.herb++;
       setState((s) => ({ ...s, hp: Math.min(s.hpMax, s.hp+heal), inv: { ...s.inv, herb: s.inv.herb-1 } }));
       setTimeout(enemyTurn, 100);
     } else if (kind === "flee") {
@@ -886,10 +871,15 @@ function PlayPage() {
     if (cmd === "help") {
       return push({ t:"system", text:"通用：help · look · stats · skills · party · inv · clear · save · load · restart" },
                   { t:"system", text:"戰鬥：attack [N] · skill [N] · ult · item · flee  (N = 招式編號)" },
-                  { t:"system", text:"場景：依下方列出的場景指令操作。輸入 shop 開啟快速黑市（戰鬥中也可以）。" });
+                  { t:"system", text:"場景：依下方列出的場景指令操作。shop 快速黑市 · gear 裝備背包 · skip 跳過劇情文字" });
+    }
+    if (cmd === "skip") return skipText();
+    if (cmd === "gear" || cmd === "bag") {
+      openShop("gear");
+      return push({ t:"system", text:"[SYS] 開啟裝備背包（ESC 關閉）" });
     }
     if (cmd === "shop" || cmd === "market") {
-      setShowShopModal(true);
+      openShop("shop");
       return push({ t:"system", text:"[SYS] 開啟快速黑市（ESC 關閉）" });
     }
     if (cmd === "clear") return setLog([]);
@@ -1062,10 +1052,26 @@ function PlayPage() {
         <ShopModal
           state={state}
           isAdmin={isAdminAccount(state.name)}
+          online={online}
+          initialTab={shopTab}
           onClose={() => setShowShopModal(false)}
-          onPurchased={(next, msg) => {
-            setState(next);
-            push({ t: "equip", text: `[MARKET] ${msg}` });
+          onNeedBind={() => {
+            setShowShopModal(false);
+            setBindPrompt("想使用黑市嗎？");
+          }}
+          onPurchased={(profile, msg) => {
+            applyProfile(profile);
+            if (msg) push({ t: "equip", text: `[MARKET] ${msg}` });
+          }}
+        />
+      )}
+      {bindPrompt && (
+        <BindAccountModal
+          reason={bindPrompt}
+          onClose={() => setBindPrompt(null)}
+          onBound={() => {
+            setBindPrompt(null);
+            window.dispatchEvent(new Event("cloud-rpg-auth-change"));
           }}
         />
       )}
@@ -1073,7 +1079,19 @@ function PlayPage() {
         <section className="crpg-panel flex flex-col overflow-hidden min-h-0">
           <div className="flex items-center justify-between px-3 py-1.5 border-b border-[#0f3a26] text-[10px] uppercase tracking-widest">
             <span className="text-[#3a8c5e]">tty1 · {scene.location || state.sceneId}{state.battle ? "  ·  [⚔ INTERACTIVE ARCADE COMBAT]" : ""}</span>
-            <span className="text-[#3a8c5e]">[●REC]</span>
+            <span className="flex items-center gap-2">
+              {typing && (
+                <button onClick={skipText} className="px-2 py-0.5 border border-[#0f3a26] text-[#ffd60a] hover:border-[#ffd60a] normal-case tracking-normal">
+                  ⏭ 跳過
+                </button>
+              )}
+              {!online && (
+                <button onClick={() => setBindPrompt("想把進度存到雲端嗎？")} className="px-2 py-0.5 border border-[#00ff88]/50 text-[#00ff88] normal-case tracking-normal">
+                  訪客模式 · 💾 綁定帳號
+                </button>
+              )}
+              <span className="text-[#3a8c5e]">[●REC]</span>
+            </span>
           </div>
 
           {state.battle && ENEMIES[state.battle.key] && (
@@ -1105,15 +1123,16 @@ function PlayPage() {
                   };
                 });
               }}
-              onBattleEnd={(win, finalHp, finalMp) => {
-                endBattle(win, finalHp, finalMp);
+              onBattleEnd={(win, finalHp, finalMp, stats) => {
+                endBattle(win, finalHp, finalMp, stats);
               }}
+              tutorial={state.battle.key === "minions" && !state.flags?.tutorialDone}
               onFlee={() => {
                 battleAction("flee");
               }}
               onLog={(line) => push(line)}
-              onOpenShopModal={() => setShowShopModal(true)}
-              paused={showShopModal}
+              onOpenShopModal={() => openShop("shop")}
+              paused={showShopModal || !!bindPrompt}
             />
           )}
 
@@ -1259,6 +1278,9 @@ function PlayPage() {
                   {state.equipped.map((eq, i) => (
                     <li key={i} className="text-[#00e5ff] crpg-glow-cyan">⚙ {eq}</li>
                   ))}
+                  {(state.gear || []).filter((g) => Object.values(state.equippedGear || {}).includes(g.id)).map((g) => (
+                    <li key={g.id} style={{ color: RARITY_COLOR[g.rarity] }} title={statText(g.stats)}>◈ {g.name}</li>
+                  ))}
                 </ul>
               </div>
             )}
@@ -1270,7 +1292,8 @@ function PlayPage() {
 
             <div className="mt-3 flex gap-1">
               <button onClick={saveGame} className="flex-1 px-2 py-1 border border-[#0f3a26] text-[#00ff88] hover:border-[#00ff88] hover:crpg-glow text-[11px]">[ SAVE ]</button>
-              <button onClick={() => setShowShopModal(true)} className="flex-1 px-2 py-1 border border-[#3a2f0a] text-[#ffd60a] hover:border-[#ffd60a] hover:crpg-glow-yellow text-[11px]">[ 🛒 黑市 ]</button>
+              <button onClick={() => openShop("shop")} className="flex-1 px-2 py-1 border border-[#3a2f0a] text-[#ffd60a] hover:border-[#ffd60a] hover:crpg-glow-yellow text-[11px]">[ 🛒 黑市 ]</button>
+              <button onClick={() => openShop("gear")} className="flex-1 px-2 py-1 border border-[#1f1a4a] text-[#c084fc] hover:border-[#c084fc] text-[11px]">[ 🎒 裝備 ]</button>
               <button onClick={loadGame} className="flex-1 px-2 py-1 border border-[#0f3a26] text-[#00e5ff] hover:border-[#00e5ff] hover:crpg-glow-cyan text-[11px]">[ LOAD ]</button>
             </div>
           </div>
@@ -1290,29 +1313,7 @@ function PlayPage() {
             </div>
           </div>
 
-          <div className="crpg-panel flex flex-col min-h-0 flex-1">
-            <div className="px-3 py-1.5 border-b border-[#0f3a26] text-[10px] uppercase tracking-widest text-[#00e5ff] crpg-glow-cyan flex justify-between">
-              <span>▌ WORLD CHAT</span>
-              <span className="text-[#3a8c5e]">#world</span>
-            </div>
-            <div ref={chatRef} className="crpg-scroll flex-1 overflow-y-auto p-2 space-y-0.5 text-[11px] leading-snug">
-              {chat.map((c, i) => (
-                <div key={i}>
-                  <span className="text-[#3a8c5e]">[World] </span>
-                  <span className={c.self ? "text-[#00ff88] crpg-glow" : "text-[#00e5ff]"}>{c.user}</span>
-                  <span className="text-[#3a8c5e]">: </span>
-                  <span className="text-[#7be0a8]">{c.msg}</span>
-                </div>
-              ))}
-            </div>
-            <form onSubmit={sendChat} className="border-t border-[#0f3a26] px-2 py-1.5 flex items-center gap-2 bg-black/40">
-              <span className="text-[#00e5ff] crpg-glow-cyan text-[11px] whitespace-nowrap">#world&gt;</span>
-              <input value={chatInput} onChange={(e) => setChatInput(e.target.value)} maxLength={140}
-                placeholder="輸入訊息後按 Enter 送出…"
-                className="flex-1 bg-transparent outline-none text-[#7be0a8] text-[11px] placeholder-[#1f5a3a]" />
-              <button type="submit" className="text-[10px] px-2 py-0.5 border border-[#0f3a26] text-[#00ff88] hover:border-[#00ff88] hover:crpg-glow">SEND</button>
-            </form>
-          </div>
+          <ChatPanel channel="world" title="WORLD CHAT" className="flex-1" compact />
         </aside>
       </div>
     </Shell>

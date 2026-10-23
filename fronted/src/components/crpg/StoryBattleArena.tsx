@@ -352,6 +352,18 @@ const PLAYER_CLASS_PROFILES: Record<string, any> = {
   },
 };
 
+const MOD_LABEL: Record<string, string> = {
+  berserk: "狂暴", glass: "玻璃大砲", blackwater: "全場黑水", thunder: "雷暴",
+  clone: "分身", regen: "再生", fog: "迷霧", giant: "巨大化",
+};
+
+// PvP：對手是其他玩家的 AI 分身，用職業決定招式名稱
+const PVP_MOVES: Record<string, any> = {
+  warrior: { specialName: "裂地斬", upperName: "狂戰衝擊", dashName: "鋼鐵粉碎", superName: "滅世斷界斬" },
+  mage: { specialName: "雷霆脈衝", upperName: "虛空火球", dashName: "極光崩解", superName: "禁忌・星界崩壞" },
+  priest: { specialName: "聖光制裁", upperName: "靈魂祈禱", dashName: "神聖脈動", superName: "終焉聖域" },
+};
+
 // 每個故事敵人對應的戰鬥場景
 const STAGE_OF: Record<string, string> = {
   minions: "village",
@@ -377,6 +389,10 @@ export function StoryBattleArena({
   onLog,
   onOpenShopModal,
   paused = false,
+  mode = "story", // story | tower | daily | raid | pvp
+  enemyOverride = null, // 伺服器 /api/battle/start 回傳的敵人設定（血量倍率、詞綴、團隊 Boss…）
+  playerBoost = null, // { atkMul, buffPct, energyStart }
+  tutorial = false, // 第一場戰鬥的互動教學
 }: any) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [muted, setMuted] = useState(false);
@@ -426,8 +442,38 @@ export function StoryBattleArena({
   pausedRef.current = paused;
 
   useEffect(() => {
-    const profile = STORY_ENEMY_PROFILES[enemyKey] || STORY_ENEMY_PROFILES.minions;
+    const ov = enemyOverride || null;
     const pProfile = PLAYER_CLASS_PROFILES[state.klass] || PLAYER_CLASS_PROFILES.warrior;
+    const mods = new Set<string>(ov?.modifiers || []);
+    const raid = ov?.raid || null;
+    let profile: any;
+    if (ov?.pvp) {
+      const oc = PLAYER_CLASS_PROFILES[ov.pvp.klass] || PLAYER_CLASS_PROFILES.warrior;
+      profile = {
+        ...oc,
+        ...PVP_MOVES[ov.pvp.klass],
+        name: ov.pvp.name,
+        title: `PVP · Lv.${ov.pvp.level} · Rating ${ov.pvp.rating}`,
+        visualType: ov.pvp.klass,
+        hp: ov.hp,
+        atkMul: Math.min(2.2, (ov.atkScale || 1) * 0.85),
+        aggr: 0.55,
+        block: 0.35,
+      };
+    } else {
+      const base = STORY_ENEMY_PROFILES[enemyKey] || STORY_ENEMY_PROFILES.minions;
+      profile = { ...base };
+      if (ov) {
+        profile.name = ov.name || base.name;
+        profile.hp = ov.hp || base.hp;
+        profile.atkMul = Number((base.atkMul * (ov.atkScale || 1)).toFixed(2));
+        profile.speed = base.speed * (ov.speedScale || 1);
+        if (ov.title) profile.title = ov.title;
+        if (mods.has("giant")) profile.scaleBoost = 1.22;
+      }
+    }
+    const gearStats = state.gearStats || {};
+    const buffPct = playerBoost?.buffPct || 0;
 
     const skill1 = classCfg.normal?.[0] || { name: "裂地斬", mp: 15, mul: 1.6 };
     const skill2 = classCfg.normal?.[1] || { name: "狂戰衝擊", mp: 18, mul: 1.8 };
@@ -437,13 +483,12 @@ export function StoryBattleArena({
     // 玩家攻擊倍率（黑市買武器 / 升級後在戰鬥中即時重算）與武器外觀等級
     const calcAtkMul = (s: any) =>
       Number(Math.max(0.88, Math.min(2.6, 0.85 + (s.atk || 20) * 0.008 + (s.level || 1) * 0.03)).toFixed(2));
-    const playerAtkMul = calcAtkMul(state);
+    const playerAtkMul = Number((calcAtkMul(state) * (1 + buffPct / 100)).toFixed(2));
     const enemyMaxHp = profile.hp;
     const loadout = weaponLoadout(state.inv);
 
     const g: any = {
       frameCounter: 0,
-      timer: 99,
       hitStop: 0,
       screenShake: 0,
       superFlash: 0,
@@ -459,7 +504,28 @@ export function StoryBattleArena({
       hitFlash: 0,
       cutIn: null,
       overclockTimer: 0,
-      stageKey: STAGE_OF[enemyKey] || "dojo",
+      stageKey: ov?.pvp ? "dojo" : STAGE_OF[enemyKey] || "dojo",
+      mode,
+      mods,
+      raid,
+      timer: ov?.timeLimit || 99,
+      // 戰鬥統計：結算時回報伺服器（傷害、連擊、用掉的道具）
+      stats: { start: performance.now(), damage: 0, maxCombo: 0, items: { herb: 0, mana: 0, totem: 0 } },
+      lastP1Attack: null,
+      tutorial: tutorial
+        ? {
+            step: 0,
+            startX: 200,
+            flash: 0,
+            steps: [
+              { text: "按住 [D] 往前走 →", done: () => g.p1.x > g.tutorial.startX + 80 },
+              { text: "按 [F] 輕攻擊", done: () => g.lastP1Attack === "light" },
+              { text: "按 [G] 重攻擊", done: () => g.lastP1Attack === "heavy" },
+              { text: "按 [R] 放出技能 1（遠程）", done: () => g.lastP1Attack === "skill1" },
+              { text: "按 [W] 跳躍（可以閃避攻擊）", done: () => g.p1.y < FLOOR_Y - 40 },
+            ],
+          }
+        : null,
       activeAssist: null, // Party assist entity when [E] is pressed
       assistCooldown: 0, // Cooldown frames (max 380 frames ~ 8s)
       p1: {
@@ -474,7 +540,7 @@ export function StoryBattleArena({
         trailHp: state.hp,
         mp: state.mp,
         mpMax: state.mpMax,
-        energy: 40,
+        energy: Math.min(100, 40 + (playerBoost?.energyStart || 0)),
         energyMax: 100,
         state: "idle",
         attackType: null,
@@ -485,6 +551,7 @@ export function StoryBattleArena({
         comboTimer: 0,
         invincibleTimer: 0,
         klass: state.klass,
+        rarityGlow: state.rarityGlow || null,
         weaponTier: loadout.tier,
         weaponPlus: loadout.plus,
         slowTimer: 0,
@@ -494,7 +561,7 @@ export function StoryBattleArena({
           secondary: pProfile.secondary,
           belt: pProfile.belt,
           headband: pProfile.headband,
-          speed: pProfile.speed,
+          speed: pProfile.speed * (1 + (gearStats.speed || 0) / 100),
           jumpForce: pProfile.jumpForce,
           atkMul: playerAtkMul,
           visualType: state.klass,
@@ -523,7 +590,8 @@ export function StoryBattleArena({
         aiCooldown: 28,
         hazardCooldown: 150,
         phase2Triggered: false,
-        weaponTier: 2,
+        weaponTier: ov?.pvp ? ov.pvp.weaponTier : 2,
+        weaponPlus: ov?.pvp ? ov.pvp.weaponPlus : 0,
         cfg: {
           ...profile,
         },
@@ -646,6 +714,7 @@ export function StoryBattleArena({
       storySfx.play("heal");
       spawnParticles(g.p1.x, g.p1.y - 45, "#00ff88", 18, 5);
       addFloatingText(g.p1.x, g.p1.y - 95, "+60 HP (草藥)", "#00ff88", 32);
+      g.stats.items.herb++;
       callbacksRef.current.onUseHerb?.(g.p1.hp);
     }
 
@@ -660,6 +729,7 @@ export function StoryBattleArena({
       storySfx.play("heal");
       spawnParticles(g.p1.x, g.p1.y - 45, "#00e5ff", 18, 5);
       addFloatingText(g.p1.x, g.p1.y - 95, "+60 MP / +50% 氣條", "#00e5ff", 32);
+      g.stats.items.mana++;
       callbacksRef.current.onUseMana?.(g.p1.mp);
     }
 
@@ -743,6 +813,7 @@ export function StoryBattleArena({
       attacker.attackType = kind;
       attacker.hasHitCurrentAttack = false;
       attacker.facing = defender.x >= attacker.x ? 1 : -1;
+      g.lastP1Attack = kind;
 
       if (kind === "light") {
         attacker.attackDuration = 16;
@@ -1010,6 +1081,10 @@ export function StoryBattleArena({
     function updateEnemyAI() {
       const ai = g.p2;
       const target = g.p1;
+      if (g.tutorial && g.tutorial.step < g.tutorial.steps.length) {
+        updateFighterControl(ai, target, false, false, false, false);
+        return;
+      }
       if (ai.aiCooldown > 0) ai.aiCooldown--;
       if (ai.hazardCooldown > 0) ai.hazardCooldown--;
 
@@ -1186,11 +1261,19 @@ export function StoryBattleArena({
       }
 
       const comboScale = Math.max(0.55, 1 - attacker.comboCount * 0.08);
-      const finalDamage = Math.max(4, Math.round(rawDamage * attacker.cfg.atkMul * comboScale));
+      let finalDamage = Math.max(4, Math.round(rawDamage * attacker.cfg.atkMul * comboScale));
+      if (g.mods.has("glass")) finalDamage *= 2;
+      // 教學戰：敵人傷害大幅降低，而且玩家不會被打到 35% 以下（保證能贏）
+      if (g.tutorial && defender === g.p1) finalDamage = Math.max(1, Math.round(finalDamage * 0.35));
       defender.hp = Math.max(0, defender.hp - finalDamage);
+      if (g.tutorial && defender === g.p1) defender.hp = Math.max(Math.round(defender.hpMax * 0.35), defender.hp);
       attacker.comboCount += 1;
       attacker.comboTimer = 52;
-      attacker.energy = Math.min(100, attacker.energy + 14);
+      if (attacker === g.p1) {
+        g.stats.damage += finalDamage;
+        g.stats.maxCombo = Math.max(g.stats.maxCombo, attacker.comboCount);
+      }
+      attacker.energy = Math.min(100, attacker.energy + 14 * (attacker === g.p1 ? 1 + (gearStats.energy || 0) / 100 : 1));
       defender.energy = Math.min(100, defender.energy + 10);
 
       g.hitStop = isHeavy ? 5 : 3;
@@ -1213,6 +1296,7 @@ export function StoryBattleArena({
         storySfx.play("super");
         spawnParticles(defender.x, defender.y - 50, "#a78bfa", 30, 7);
         addFloatingText(defender.x, defender.y - 115, "★ 不死圖騰發動！復活 60% HP ★", "#a78bfa", 45);
+        g.stats.items.totem++;
         callbacksRef.current.onUseTotem?.(reviveHp);
         return;
       }
@@ -1336,7 +1420,7 @@ export function StoryBattleArena({
       const lo = weaponLoadout(cur.inv);
       g.p1.weaponTier = lo.tier;
       g.p1.weaponPlus = lo.plus;
-      g.p1.cfg.atkMul = calcAtkMul(cur);
+      g.p1.cfg.atkMul = Number((calcAtkMul(cur) * (1 + buffPct / 100)).toFixed(2));
       if (g.overclockTimer > 0) g.overclockTimer--;
 
       if (g.superFlash > 0) g.superFlash--;
@@ -1377,16 +1461,65 @@ export function StoryBattleArena({
         g.phaseTimer--;
         if (g.phaseTimer <= 0 && g.phase !== "done") {
           g.phase = "done";
-          const win = g.p1.hp > 0 && g.p2.hp <= 0;
-          callbacksRef.current.onBattleEnd?.(win, Math.max(1, g.p1.hp), g.p1.mp);
+          const win = g.raid ? g.p1.hp > 0 : g.p1.hp > 0 && g.p2.hp <= 0;
+          callbacksRef.current.onBattleEnd?.(win, Math.max(1, g.p1.hp), g.p1.mp, {
+            durationMs: Math.round(performance.now() - g.stats.start),
+            damage: g.stats.damage,
+            maxCombo: g.stats.maxCombo,
+            itemsUsed: g.stats.items,
+            hpLeft: Math.max(0, g.p1.hp),
+          });
         }
         return;
       }
 
       if (g.phase === "done") return;
 
+      // 團隊 Boss：真實秒數倒數，時間到就結算傷害
+      if (g.raid) {
+        if (g.frameCounter % 48 === 0 && g.timer > 0) {
+          g.timer--;
+          if (g.timer === 0) {
+            g.phase = "ko";
+            g.phaseTimer = 80;
+            g.bannerText = "TIME UP !!";
+            g.subBannerText = `本次對 Boss 造成 ${g.stats.damage.toLocaleString()} 傷害`;
+            storySfx.play("ko");
+            return;
+          }
+        }
+      }
+
+      // 詞綴：再生、全場黑水、雷暴、分身突進
+      if (g.mods.size && g.phase === "fight") {
+        const f = g.frameCounter;
+        if (g.mods.has("regen") && f % 48 === 0 && g.p2.hp > 0) g.p2.hp = Math.min(g.p2.hpMax, g.p2.hp + Math.ceil(g.p2.hpMax * 0.006));
+        if (g.mods.has("blackwater") && f % 330 === 100 && !g.hazards.some((h: any) => h.type === "black_water")) {
+          g.hazards.push({ type: "black_water", x: Math.max(70, Math.min(830, g.p1.x)), width: 100, warnTimer: 34, warnMax: 34, activeTimer: 200, activeMax: 200, damage: 5, hasHit: false, color: "#22d3ee", label: "☠ 黑水陷阱 · 減速" });
+        }
+        if (g.mods.has("thunder") && f % 260 === 60) {
+          g.hazards.push({ type: "sky_lightning", x: Math.max(70, Math.min(830, g.p1.x)), width: 64, warnTimer: 44, warnMax: 44, activeTimer: 18, activeMax: 18, damage: 22, hasHit: false, seed: Math.random() * 100, color: "#fde047", label: "⚡ 雷暴" });
+        }
+        if (g.mods.has("clone") && f % 300 === 150) {
+          const dir = g.p1.x > 450 ? 1 : -1; // 從玩家背後的另一端衝過來
+          g.hazards.push({ type: "phantom", dir, x: dir > 0 ? -40 : 940, warnTimer: 40, activeTimer: 70, damage: 20, hasHit: false, color: "#c084fc", snap: FX.snapshot(g.p2) });
+        }
+      }
+
+      // 互動教學：完成一步就跳下一步
+      const tut = g.tutorial;
+      if (tut && tut.step < tut.steps.length) {
+        if (tut.flash > 0) tut.flash--;
+        else if (tut.steps[tut.step].done()) {
+          tut.step++;
+          tut.flash = 28;
+          storySfx.play("assist");
+          addFloatingText(g.p1.x, g.p1.y - 120, tut.step < tut.steps.length ? "✓ 很好！" : "✓ 教學完成！打倒雜魚老大吧！", "#00ff88", 40);
+        }
+      }
+
       // Slowed round timer: 1 tick per 75 logic steps (~1.6 real seconds)
-      if (g.frameCounter % 75 === 0 && g.timer > 0) {
+      if (!g.raid && g.frameCounter % 75 === 0 && g.timer > 0) {
         g.timer--;
         if (g.timer === 0) {
           const p1Ratio = g.p1.hp / g.p1.hpMax;
@@ -1471,6 +1604,13 @@ export function StoryBattleArena({
             FX.emit(g, "code", hz.x, FLOOR_Y - 10, 10, { color: hz.color, speed: 4, life: 26 });
             FX.emit(g, "spark", hz.x, FLOOR_Y - 6, 8, { color: [hz.color, "#ffffff"], speed: 5, angle: -Math.PI / 2, spread: 2.2, life: 14 });
           }
+        } else if (hz.type === "phantom") {
+          hz.x += hz.dir * 15;
+          if (!hz.hasHit && Math.abs(p1.x - hz.x) < 32 && p1.y > FLOOR_Y - 45) {
+            hz.hasHit = true;
+            applyHit(g.p2, p1, hz.damage, 7, -6, false, true, true);
+          }
+          if (hz.x < -80 || hz.x > 980) hz.activeTimer = 0;
         } else if (hz.type === "laser_sweep") {
           if (!hz.hasHit && hz.y + hz.thick * 0.5 > p1Top && hz.y - hz.thick * 0.5 < p1.y) {
             hz.hasHit = true;
@@ -1615,9 +1755,19 @@ export function StoryBattleArena({
       FX.drawFloatingTexts(ctx, g);
       ctx.restore();
 
+      // 迷霧詞綴：只看得到玩家周圍
+      if (g.mods.has("fog")) {
+        const fg = ctx.createRadialGradient(g.p1.x, g.p1.y - 60, 90, g.p1.x, g.p1.y - 60, 420);
+        fg.addColorStop(0, "rgba(0,0,0,0)");
+        fg.addColorStop(1, "rgba(0,0,0,0.82)");
+        ctx.fillStyle = fg;
+        ctx.fillRect(0, 0, W, H);
+      }
+
       FX.drawHitFlash(ctx, g, W, H);
       FX.glitchPost(ctx, W, H, overclock ? (g.overclockTimer > 0 ? 1 : 0.45) : 0, frame);
       drawHUD(ctx, W, H);
+      drawTutorial(ctx, W);
       FX.drawCutIn(ctx, g, W, H, frame);
       if (g.overclockTimer > 0 && g.phase === "fight") {
         FX.drawBanner(ctx, W, H, "⚠ SYSTEM OVERCLOCK", "Administrator 第二階段：全畫面雷射 · 數據方塊轟炸！", frame, 90 - g.overclockTimer);
@@ -1627,6 +1777,26 @@ export function StoryBattleArena({
         ctx.fillRect(0, 0, W, H);
         FX.outlinedText(ctx, "⏸ PAUSED · 黑市交易中", W / 2, H / 2, 26, "#ffd60a", "#000", "center", 6);
         FX.outlinedText(ctx, "關閉黑市後繼續戰鬥", W / 2, H / 2 + 28, 13, "#7dffb6", "#000", "center", 4);
+      }
+    }
+
+    function drawTutorial(ctx: CanvasRenderingContext2D, W: number) {
+      const tut = g.tutorial;
+      if (!tut || g.phase !== "fight" || tut.step >= tut.steps.length) return;
+      const step = tut.steps[tut.step];
+      const y = 96;
+      ctx.save();
+      ctx.fillStyle = "rgba(3,10,8,0.85)";
+      ctx.strokeStyle = tut.flash > 0 ? "#00ff88" : "#ffd60a";
+      ctx.lineWidth = 2;
+      ctx.fillRect(W / 2 - 200, y - 26, 400, 52);
+      ctx.strokeRect(W / 2 - 200, y - 26, 400, 52);
+      ctx.restore();
+      FX.outlinedText(ctx, `教學 ${tut.step + 1}/${tut.steps.length}`, W / 2, y - 8, 11, "#7dffb6", "#000", "center", 3);
+      FX.outlinedText(ctx, step.text, W / 2, y + 15, 18, "#ffd60a", "#000", "center", 4);
+      for (let i = 0; i < tut.steps.length; i++) {
+        ctx.fillStyle = i < tut.step ? "#00ff88" : i === tut.step ? "#ffd60a" : "#1f3a2e";
+        ctx.fillRect(W / 2 - 50 + i * 22, y + 30, 14, 4);
       }
     }
 
@@ -1643,7 +1813,13 @@ export function StoryBattleArena({
       FX.drawPortrait(ctx, W - 34, 36, 24, g.p2, "right", frame);
       FX.drawBar(ctx, p1X, topY, barW, barH, g.p1.hp / g.p1.hpMax, g.p1.trailHp / g.p1.hpMax, "left", "#7dffb6", "#00b86b", frame);
       const oc = !!g.p2.phase2Triggered;
-      FX.drawBar(ctx, p2X, topY, barW, barH, g.p2.hp / g.p2.hpMax, g.p2.trailHp / g.p2.hpMax, "right", oc ? "#ff8fa3" : "#ff7a90", oc ? "#9f1239" : "#e11d48", frame);
+      if (g.raid) {
+        // 團隊 Boss：顯示全服共享血量（扣掉這場自己打的傷害）
+        const left = Math.max(0, g.raid.hp - g.stats.damage);
+        FX.drawBar(ctx, p2X, topY, barW, barH, left / g.raid.hpMax, g.raid.hp / g.raid.hpMax, "right", "#ff8fa3", "#9f1239", frame);
+      } else {
+        FX.drawBar(ctx, p2X, topY, barW, barH, g.p2.hp / g.p2.hpMax, g.p2.trailHp / g.p2.hpMax, "right", oc ? "#ff8fa3" : "#ff7a90", oc ? "#9f1239" : "#e11d48", frame);
+      }
 
       // P1 MP 條 + 名稱 + 武器
       ctx.fillStyle = "rgba(5,10,14,0.85)";
@@ -1661,7 +1837,14 @@ export function StoryBattleArena({
       }
 
       // P2 名稱 / 稱號 / 二階段
-      FX.outlinedText(ctx, `${g.p2.cfg.name}  HP ${g.p2.hp}/${g.p2.hpMax}`, p2X + barW, topY + barH + 18, 12, "#ff7a90", "#000", "right", 3);
+      const p2Label = g.raid
+        ? `${g.p2.cfg.name}  全服血量 ${Math.max(0, g.raid.hp - g.stats.damage).toLocaleString()}/${g.raid.hpMax.toLocaleString()}`
+        : `${g.p2.cfg.name}  HP ${g.p2.hp}/${g.p2.hpMax}`;
+      FX.outlinedText(ctx, p2Label, p2X + barW, topY + barH + 18, 12, "#ff7a90", "#000", "right", 3);
+      if (g.raid) FX.outlinedText(ctx, `本場傷害 ${g.stats.damage.toLocaleString()}`, W / 2, topY + 58, 14, "#ffd60a", "#000", "center", 4);
+      if (g.mods.size) {
+        FX.outlinedText(ctx, [...g.mods].map((m) => MOD_LABEL[m] || m).join(" · "), p2X + barW, topY + barH + 64, 10, "#c084fc", "#000", "right", 3);
+      }
       FX.outlinedText(ctx, g.p2.cfg.title || "", p2X + barW, topY + barH + 33, 10, "#fda4af", "#000", "right", 3);
       if (oc && frame % 30 < 20) {
         FX.outlinedText(ctx, "⚠ PHASE 2 · OVERCLOCK", p2X + barW, topY + barH + 49, 11, "#ff4d6d", "#000", "right", 3);
@@ -1719,13 +1902,21 @@ export function StoryBattleArena({
     let accumulator = 0;
     const STEP_MS = 21;
 
+    let dpr = 1;
+    const perf = FX.createPerfMonitor(() => {
+      const c = canvasRef.current?.getContext("2d");
+      if (c) FX.setLowQuality(c, true);
+    });
+
     function step(now: number) {
       const dt = Math.min(80, Math.max(0, now - lastTime));
+      perf(dt);
       lastTime = now;
       accumulator += dt;
 
       const canvas = canvasRef.current;
       if (canvas) {
+        dpr = FX.setupCanvas(canvas, 900, 430);
         const ctx = canvas.getContext("2d");
         if (ctx) {
           if (pausedRef.current) {
@@ -1738,6 +1929,7 @@ export function StoryBattleArena({
             accumulator -= STEP_MS;
             substeps++;
           }
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
           renderGame(ctx);
         }
       }

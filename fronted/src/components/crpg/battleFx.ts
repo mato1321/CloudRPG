@@ -45,6 +45,47 @@ export function rgba(hex: string, a: number) {
 const GLYPHS = "01アイウエオカキクケコサシスセソ<>{}[]#$%&@ABCDEF";
 const GARBLE = "▓░▒█¥$#@!?※〒≠∑∂Ω卍¿§¶ØÆ<>/\\|";
 
+/* ───────────── 0. 畫質：高解析度螢幕 + 低階裝置自動降畫質 ───────────── */
+
+let PARTICLE_CAP = 420;
+
+/** 依螢幕 DPR 設定 canvas 實際像素（最多 2 倍），回傳 dpr；繪圖時仍使用 900×H 的邏輯座標 */
+export function setupCanvas(canvas: HTMLCanvasElement, W: number, H: number) {
+  const dpr = Math.min(2, (typeof window !== "undefined" && window.devicePixelRatio) || 1);
+  if (canvas.width !== Math.round(W * dpr)) {
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+  }
+  return dpr;
+}
+
+/** 低畫質模式：關掉 shadowBlur（最吃效能）、降低粒子上限 */
+export function setLowQuality(ctx: CanvasRenderingContext2D, low: boolean) {
+  if (low) {
+    Object.defineProperty(ctx, "shadowBlur", { configurable: true, get: () => 0, set: () => {} });
+    PARTICLE_CAP = 160;
+  } else {
+    delete (ctx as any).shadowBlur;
+    PARTICLE_CAP = 420;
+  }
+}
+
+/** 偵測掉幀：平均每幀超過 26ms 持續約 2 秒就切到低畫質 */
+export function createPerfMonitor(onLow: () => void) {
+  let avg = 16;
+  let bad = 0;
+  let fired = false;
+  return (dt: number) => {
+    if (fired) return;
+    avg = avg * 0.95 + dt * 0.05;
+    bad = avg > 26 ? bad + 1 : Math.max(0, bad - 2);
+    if (bad > 120) {
+      fired = true;
+      onLow();
+    }
+  };
+}
+
 /* ───────────── 1. 角色外型設定 ───────────── */
 
 export const VISUALS: Record<string, any> = {
@@ -89,6 +130,14 @@ export function normKind(k: string) {
 }
 
 /* 武器分級外觀：0 = 初始、1 = 初級武器、2 = 高級武器、3 = ???終端機 */
+export const RARITY_GLOW: Record<string, string> = {
+  common: "#cbd5e1",
+  rare: "#38bdf8",
+  epic: "#c084fc",
+  legend: "#f97316",
+  myth: "#ff4d6d",
+};
+
 const WEAPON_LOOKS: Record<string, any[]> = {
   greatsword: [
     { name: "很廢的武器", blade: "#8b8f97", edge: "#b8bcc4", hilt: "#6b4f2a", glow: null, fx: null },
@@ -376,7 +425,8 @@ export function drawFighter(ctx: CanvasRenderingContext2D, f: any, frame: number
   }
 
   const face = (f.facing || 1) * (P.flip ? -1 : 1);
-  ctx.scale(face * vis.scale, vis.scale);
+  const sc = vis.scale * (cfg.scaleBoost || 1);
+  ctx.scale(face * sc, sc);
   if (opts.ghost) ctx.globalAlpha *= opts.alpha ?? 0.35;
   else if (blink) ctx.globalAlpha *= 0.55;
 
@@ -1283,6 +1333,21 @@ function drawWeapon(ctx, J, vis, pal, f, frame, look, opts) {
   // 現在 +x 方向就是武器延伸方向
 
   const glowOn = look && look.glow && !opts.ghost;
+  // 裝備的最高稀有度會在武器外圈再加一層光暈
+  if (f.rarityGlow && RARITY_GLOW[f.rarityGlow] && !opts.ghost) {
+    const rc = RARITY_GLOW[f.rarityGlow];
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = 0.35 + Math.sin(frame * 0.15) * 0.15;
+    ctx.shadowColor = rc;
+    ctx.shadowBlur = 18;
+    ctx.strokeStyle = rc;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.ellipse(26, 0, 34, 9, 0, 0, TAU);
+    ctx.stroke();
+    ctx.restore();
+  }
   const glowA = 0.35 + plus * 0.15 + (attacking ? 0.25 : 0);
   const blade = (len, wid, col, edge) => {
     ctx.beginPath();
@@ -1667,7 +1732,7 @@ export function updateParticles(g: any) {
     p.life--;
   }
   g.particles = g.particles.filter((p: any) => p.life > 0 && p.y < 470);
-  if (g.particles.length > 420) g.particles.splice(0, g.particles.length - 420);
+  if (g.particles.length > PARTICLE_CAP) g.particles.splice(0, g.particles.length - PARTICLE_CAP);
 }
 
 export function drawParticles(ctx: CanvasRenderingContext2D, g: any) {
@@ -2199,6 +2264,9 @@ export function emitWeaponParticles(g: any, f: any) {
   const look = weaponLook(f);
   const tip = f._tip;
   if (!tip || f.state === "ko") return;
+  if (f.rarityGlow && RARITY_GLOW[f.rarityGlow] && g.frameCounter % 9 === 0) {
+    emit(g, "star", tip.x, tip.y, 1, { color: RARITY_GLOW[f.rarityGlow], speed: 1, grav: -0.02, life: 20, size: 2 });
+  }
   const plus = clamp(f.weaponPlus || 0, 0, 3);
   let fx = look?.fx;
   const v = visualOf(f);
@@ -2723,6 +2791,28 @@ export function drawHazard(ctx: CanvasRenderingContext2D, hz: any, frame: number
       }
       break;
     }
+    case "phantom": {
+      // 敵人分身：預警箭頭 → 從畫面另一端貼地突進（跳起來閃避）
+      if (warn) {
+        const edge = hz.dir > 0 ? 20 : W - 20;
+        ctx.globalAlpha = 0.4 + pulse * 0.6;
+        ctx.fillStyle = "#c084fc";
+        ctx.font = "bold 22px monospace";
+        ctx.textAlign = "center";
+        ctx.fillText(hz.dir > 0 ? "▶▶" : "◀◀", edge + hz.dir * 20, FLOOR - 50);
+        ctx.globalAlpha = 1;
+        label("👥 分身突進！跳起來閃避", FLOOR - 120);
+      } else if (act && hz.snap) {
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        for (let k = 0; k < 3; k++) {
+          ctx.globalAlpha = 0.45 - k * 0.12;
+          drawFighter(ctx, { ...hz.snap, x: hz.x - hz.dir * k * 26, facing: hz.dir, state: "attack", attackType: "skill3", stateTimer: 10, attackDuration: 26 }, frame, { ghost: true, alpha: 1 });
+        }
+        ctx.restore();
+      }
+      break;
+    }
     case "data_block": {
       const s = hz.size;
       if (warn || hz.y < FLOOR - s) {
@@ -2767,13 +2857,15 @@ export function drawHazard(ctx: CanvasRenderingContext2D, hz: any, frame: number
 
 const stageCache: Record<string, HTMLCanvasElement> = {};
 
-function staticLayer(key: string, W: number, H: number, paint: (c: CanvasRenderingContext2D) => void) {
-  const id = `${key}:${W}x${H}`;
+function staticLayer(key: string, W: number, H: number, paint: (c: CanvasRenderingContext2D) => void, dpr = 1) {
+  const id = `${key}:${W}x${H}@${dpr}`;
   if (stageCache[id]) return stageCache[id];
   const c = document.createElement("canvas");
-  c.width = W;
-  c.height = H;
-  paint(c.getContext("2d"));
+  c.width = Math.round(W * dpr);
+  c.height = Math.round(H * dpr);
+  const cx = c.getContext("2d");
+  cx.scale(dpr, dpr);
+  paint(cx);
   stageCache[id] = c;
   return c;
 }
@@ -2810,8 +2902,9 @@ function skyline(ctx, W, baseY, count, minH, maxH, col, seed, windows = null) {
 /** key：village | cave | mansion | abyss | skyisle | demon | core | dojo */
 export function drawStage(ctx: CanvasRenderingContext2D, key: string, frame: number, W: number, H: number, opts: any = {}) {
   const F = FLOOR;
-  const layer = staticLayer(key, W, H, (c) => paintStatic(c, key, W, H));
-  ctx.drawImage(layer, 0, 0);
+  const dpr = ctx.canvas.width / W;
+  const layer = staticLayer(key, W, H, (c) => paintStatic(c, key, W, H), Math.round(dpr * 100) / 100);
+  ctx.drawImage(layer, 0, 0, W, H);
 
   switch (key) {
     case "village": {
@@ -3708,7 +3801,8 @@ export function glitchPost(ctx, W, H, intensity, frame) {
     const y = hash(i * 3.1 + frame) * H;
     const h = 3 + hash(i * 5.7 + frame) * 16;
     const dx = (hash(i * 9.1 + frame) - 0.5) * 36 * intensity;
-    ctx.drawImage(ctx.canvas, 0, y, W, h, dx, y, W, h);
+    const k = ctx.canvas.width / W;
+    ctx.drawImage(ctx.canvas, 0, y * k, W * k, h * k, dx, y, W, h);
   }
   ctx.fillStyle = "rgba(255,0,60,0.05)";
   for (let y = 0; y < H; y += 4) ctx.fillRect(0, y, W, 1);

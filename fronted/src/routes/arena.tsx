@@ -910,14 +910,22 @@ function ArenaPage() {
     let accumulator = 0;
     const STEP_MS = 21; // ~47.6 logic ticks/sec — classic Street Fighter arcade feel
 
+    let dpr = 1;
+    const perf = FX.createPerfMonitor(() => {
+      const c = canvasRef.current?.getContext("2d");
+      if (c) FX.setLowQuality(c, true);
+    });
+
     function step(now: number) {
       const dt = Math.min(80, Math.max(0, now - lastTime));
+      perf(dt);
       lastTime = now;
       accumulator += dt;
 
       const g = gameRef.current;
       const canvas = canvasRef.current;
       if (g && canvas) {
+        dpr = FX.setupCanvas(canvas, 900, 450);
         const ctx = canvas.getContext("2d");
         if (ctx) {
           let substeps = 0;
@@ -926,6 +934,7 @@ function ArenaPage() {
             accumulator -= STEP_MS;
             substeps++;
           }
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
           renderGame(ctx, g);
         }
       }

@@ -9,18 +9,43 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TowerRouteImport } from './routes/tower'
 import { Route as RegisterRouteImport } from './routes/register'
+import { Route as RankingRouteImport } from './routes/ranking'
+import { Route as RaidRouteImport } from './routes/raid'
+import { Route as PvpRouteImport } from './routes/pvp'
 import { Route as PlayRouteImport } from './routes/play'
 import { Route as MarketRouteImport } from './routes/market'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as GuildRouteImport } from './routes/guild'
+import { Route as DailyRouteImport } from './routes/daily'
 import { Route as CodexRouteImport } from './routes/codex'
 import { Route as ArenaRouteImport } from './routes/arena'
 import { Route as IndexRouteImport } from './routes/index'
 
+const TowerRoute = TowerRouteImport.update({
+  id: '/tower',
+  path: '/tower',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RegisterRoute = RegisterRouteImport.update({
   id: '/register',
   path: '/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RankingRoute = RankingRouteImport.update({
+  id: '/ranking',
+  path: '/ranking',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RaidRoute = RaidRouteImport.update({
+  id: '/raid',
+  path: '/raid',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PvpRoute = PvpRouteImport.update({
+  id: '/pvp',
+  path: '/pvp',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PlayRoute = PlayRouteImport.update({
@@ -43,6 +68,11 @@ const GuildRoute = GuildRouteImport.update({
   path: '/guild',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DailyRoute = DailyRouteImport.update({
+  id: '/daily',
+  path: '/daily',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CodexRoute = CodexRouteImport.update({
   id: '/codex',
   path: '/codex',
@@ -63,32 +93,47 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/arena': typeof ArenaRoute
   '/codex': typeof CodexRoute
+  '/daily': typeof DailyRoute
   '/guild': typeof GuildRoute
   '/login': typeof LoginRoute
   '/market': typeof MarketRoute
   '/play': typeof PlayRoute
+  '/pvp': typeof PvpRoute
+  '/raid': typeof RaidRoute
+  '/ranking': typeof RankingRoute
   '/register': typeof RegisterRoute
+  '/tower': typeof TowerRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/arena': typeof ArenaRoute
   '/codex': typeof CodexRoute
+  '/daily': typeof DailyRoute
   '/guild': typeof GuildRoute
   '/login': typeof LoginRoute
   '/market': typeof MarketRoute
   '/play': typeof PlayRoute
+  '/pvp': typeof PvpRoute
+  '/raid': typeof RaidRoute
+  '/ranking': typeof RankingRoute
   '/register': typeof RegisterRoute
+  '/tower': typeof TowerRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/arena': typeof ArenaRoute
   '/codex': typeof CodexRoute
+  '/daily': typeof DailyRoute
   '/guild': typeof GuildRoute
   '/login': typeof LoginRoute
   '/market': typeof MarketRoute
   '/play': typeof PlayRoute
+  '/pvp': typeof PvpRoute
+  '/raid': typeof RaidRoute
+  '/ranking': typeof RankingRoute
   '/register': typeof RegisterRoute
+  '/tower': typeof TowerRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -96,51 +141,99 @@ export interface FileRouteTypes {
     | '/'
     | '/arena'
     | '/codex'
+    | '/daily'
     | '/guild'
     | '/login'
     | '/market'
     | '/play'
+    | '/pvp'
+    | '/raid'
+    | '/ranking'
     | '/register'
+    | '/tower'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/arena'
     | '/codex'
+    | '/daily'
     | '/guild'
     | '/login'
     | '/market'
     | '/play'
+    | '/pvp'
+    | '/raid'
+    | '/ranking'
     | '/register'
+    | '/tower'
   id:
     | '__root__'
     | '/'
     | '/arena'
     | '/codex'
+    | '/daily'
     | '/guild'
     | '/login'
     | '/market'
     | '/play'
+    | '/pvp'
+    | '/raid'
+    | '/ranking'
     | '/register'
+    | '/tower'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ArenaRoute: typeof ArenaRoute
   CodexRoute: typeof CodexRoute
+  DailyRoute: typeof DailyRoute
   GuildRoute: typeof GuildRoute
   LoginRoute: typeof LoginRoute
   MarketRoute: typeof MarketRoute
   PlayRoute: typeof PlayRoute
+  PvpRoute: typeof PvpRoute
+  RaidRoute: typeof RaidRoute
+  RankingRoute: typeof RankingRoute
   RegisterRoute: typeof RegisterRoute
+  TowerRoute: typeof TowerRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/tower': {
+      id: '/tower'
+      path: '/tower'
+      fullPath: '/tower'
+      preLoaderRoute: typeof TowerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/register': {
       id: '/register'
       path: '/register'
       fullPath: '/register'
       preLoaderRoute: typeof RegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ranking': {
+      id: '/ranking'
+      path: '/ranking'
+      fullPath: '/ranking'
+      preLoaderRoute: typeof RankingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/raid': {
+      id: '/raid'
+      path: '/raid'
+      fullPath: '/raid'
+      preLoaderRoute: typeof RaidRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pvp': {
+      id: '/pvp'
+      path: '/pvp'
+      fullPath: '/pvp'
+      preLoaderRoute: typeof PvpRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/play': {
@@ -171,6 +264,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GuildRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/daily': {
+      id: '/daily'
+      path: '/daily'
+      fullPath: '/daily'
+      preLoaderRoute: typeof DailyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/codex': {
       id: '/codex'
       path: '/codex'
@@ -199,11 +299,16 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ArenaRoute: ArenaRoute,
   CodexRoute: CodexRoute,
+  DailyRoute: DailyRoute,
   GuildRoute: GuildRoute,
   LoginRoute: LoginRoute,
   MarketRoute: MarketRoute,
   PlayRoute: PlayRoute,
+  PvpRoute: PvpRoute,
+  RaidRoute: RaidRoute,
+  RankingRoute: RankingRoute,
   RegisterRoute: RegisterRoute,
+  TowerRoute: TowerRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
