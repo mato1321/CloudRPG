@@ -38,3 +38,6 @@ venv
 .env
 .env.*
 !.env.example
+
+# Python 編譯快取
+__pycache__/

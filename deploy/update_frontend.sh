@@ -15,6 +15,10 @@ sudo cp ~/CloudRPG/deploy/cloudrpg-frontend.service /etc/systemd/system/cloudrpg
 sudo systemctl daemon-reload
 sudo systemctl start cloudrpg-frontend
 
-sleep 5
+# vite preview 啟動要幾秒：最多等 60 秒，期間連不上不算失敗
+for _ in $(seq 1 30); do
+  curl -fsS -o /dev/null http://127.0.0.1:4173/ && break
+  sleep 2
+done
 systemctl is-active cloudrpg-frontend
 curl -s -o /dev/null -w "frontend / -> HTTP %{http_code}\n" http://127.0.0.1:4173/
