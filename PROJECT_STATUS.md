@@ -10,6 +10,7 @@
 - **「錯誤、沒辦法動」的主因**：故事模式進入 2D 格鬥後，鍵盤被下方的指令輸入框吃掉，角色完全不會動。另外還有「登入過期時後端回 500」、「/play 水合錯誤」、「GitHub 版本 API 位址寫死成舊 IP」等問題。
 - **以上都已修好，部署到 EC2 並在實機驗證過**（第 3 節）。
 - **第二輪（2026-10-23）**：格鬥畫面全面升級（各職業 / Boss 專屬外型、招式特效、Boss 專屬機制、武器外觀隨黑市購買進化、戰鬥中快速黑市），前端改成正式 build 部署，載入請求數 70+ → 5（第 9 節）。
+- **第三輪（2026-10-23，commit `278fb33`）**：改成多人線上遊戲——伺服器端經濟與戰鬥驗證（防作弊）、限流、隨機掉寶、故障之塔、每日挑戰、世界 Boss、真的公會（公會 Boss + 公會聊天）、非同步 PvP、WebSocket 聊天室、排行榜、訪客模式 + 綁定帳號、新手教學。已部署到 EC2 並在正式站驗證（第 10 節）。
 - **⚠️ 發現嚴重資安問題需要你本人處理**：資料庫密碼和 JWT 金鑰被 commit 在**公開**的 GitHub repo，而且 RDS 對全世界開放 5432 port（第 4 節）。
 
 ---
@@ -17,23 +18,29 @@
 ## 1. 目前部署架構（實際檢查結果）
 
 ```
-瀏覽器 ──HTTP :80──▶ Nginx ──┬── /api/*、/health ──▶ FastAPI (uvicorn) :8000 ──▶ RDS PostgreSQL
-                             └── 其他所有路徑 ─────▶ 前端正式版 :4173（vite preview 跑 build 好的 SSR）
+                                 ┌── /api/ws（WebSocket）─┐
+瀏覽器 ──HTTP :80──▶ Nginx ──────┼── /api/*、/health ─────┴──▶ FastAPI (uvicorn) :8000 ──▶ RDS PostgreSQL
+                                 └── 其他所有路徑 ───────────▶ 前端正式版 :4173（vite preview 跑 build 好的 SSR）
+
+EC2 關機時：喚醒網址（Lambda Function URL）──▶ StartInstances ──▶ 「伺服器啟動中」頁面輪詢 /health ──▶ 轉址回遊戲
 ```
 
 | 項目 | 實際狀態 |
 |---|---|
 | EC2 | t3.micro（~1 GB RAM + 2 GB swap）· us-east-1d · Ubuntu 26.04 · Python 3.14 · Node 22 |
-| 公開 IP | `54.161.3.74`（**Learner Lab 每次重開都會換**；文件裡的 `44.205.216.47` 已失效） |
+| 公開 IP | `54.161.3.74`，**是 Elastic IP**（`eipalloc-01b49f7451674e958`），重開 lab 也不會變。（舊版文件說「每次重開會換」是錯的；`44.205.216.47` 是更早的 IP，已失效） |
 | 後端服務 | systemd `cloudrpg-backend` → `uvicorn app.main:app --port 8000` |
 | 前端服務 | systemd `cloudrpg-frontend` → `npm run start`（**正式 build**，2026-10-23 起；原本是 `npm run dev` 開發模式）port 4173 |
-| 資料庫 | RDS **PostgreSQL** `cloudrpg-db`（publicly accessible） |
-| 部署方式 | 在 Mac 打包 tar 上傳 + `deploy_remote.sh`，EC2 上的專案**不是 git repo** |
-| 磁碟 | 6.7 GB；檢查時 92% → 清理後 83% |
+| Nginx | `/api/ws` → :8000（WebSocket upgrade，`proxy_read_timeout 3600s`，第三輪新增）、`/api/` 與 `/health` → :8000、其他 → :4173 |
+| 資料庫 | RDS **PostgreSQL** `cloudrpg-db`（publicly accessible）。**自動備份已開啟：保留 7 天**，備份時段 18:00–18:30 UTC（台灣 02:00） |
+| 喚醒頁 | Lambda `cloudrpg-wake`（角色 `LabRole`）：https://u22bkmoz6n7547l75ovss2hrqi0peogd.lambda-url.us-east-1.on.aws/ ，原始碼 `deploy/wake_lambda/lambda_function.py`；`?to=/raid` 可指定頁面（已防開放轉址） |
+| 部署方式 | 本機打包 tar，經 EC2 Instance Connect 上傳；EC2 上的專案**不是 git repo** |
+| 磁碟 | 6.7 GB；第一輪清理後 83%，第三輪部署後 **90%（剩約 720 MB）** |
 | 安全群組 | `sg-083d09c1c87ef2f90`（EC2 與 RDS 共用）：22、80、443、4173、5173、8000、5432 全對 `0.0.0.0/0` 開放 |
 | EC2 金鑰 | 沒有 key pair、沒有 IAM role；要連線請用 Console 的 **EC2 Instance Connect** |
+| 不能用的服務 | CloudFront（Learner Lab 拒絕 `cloudfront:List`），所以沒有 CDN / HTTPS 代理 |
 
-> `FINAL_PROJECT_REPORT.md` 寫的是「RDS MySQL」和「progress 表」，實際是 **PostgreSQL**，進度存在 `users.game_progress` 欄位，報告需要更正。
+> `FINAL_PROJECT_REPORT.md` 寫的是「RDS MySQL」和「progress 表」，實際是 **PostgreSQL**，劇情進度存在 `users.game_progress` 欄位（第三輪起金幣 / 等級 / 道具 / 裝備改存 `player_profiles` 表，由伺服器計算），報告需要更正。
 
 ---
 
@@ -132,7 +139,7 @@ cd ~/CloudRPG && tar xzf ~/backups/pre-fix-20261022-155657.tgz && sudo systemctl
    - EC2 和 RDS 目前**共用同一個安全群組**，所以要先建好 RDS 專用的再改，不要直接刪規則
 3. **多餘的對外 port**：4173、5173、8000 不需要對外（全部經 Nginx :80），建議從安全群組移除。移除後請一律用 `http://<IP>/` 進入。
 4. **Vite 開發伺服器直接對外**：log 已經看到掃描器在試 `/etc/passwd`、`/.env`（被 Vite 擋下），但開發伺服器不是設計來對外的，見 6.1。
-5. **任何人註冊 `admin` 就有無限金幣**：前後端都只用使用者名稱判斷，建議改成資料庫欄位 `is_admin`。
+5. **管理員帳號（黑市免費）只用使用者名稱判斷**：第三輪改成由後端設定 `ADMIN_USERNAMES` 決定（逗號分隔），但**預設值是 `admin`**，正式站的 `backend/.env` 目前沒有設定這個值。如果 `admin` 帳號不是你的，或不想保留這個特權，在 EC2 的 `backend/.env` 加上 `ADMIN_USERNAMES=`（留空 = 沒有管理員）後 `sudo systemctl restart cloudrpg-backend`。長期建議改成資料庫欄位 `is_admin`。
 
 ---
 
@@ -140,21 +147,30 @@ cd ~/CloudRPG && tar xzf ~/backups/pre-fix-20261022-155657.tgz && sudo systemctl
 
 | 模組 | 狀態 | 說明 |
 |---|---|---|
-| 註冊／登入（JWT + Argon2） | ✅ 完成 | `/api/auth/register`、`/login`、`/me` |
-| 雲端存讀檔 | ✅ 完成 | `/api/progress/save`、`load`、`clear`；整份狀態存在 `users.game_progress`（JSON），每 30 秒同步 |
-| 故事模式 `/play` | ✅ 可從頭玩到結局 | 19 個場景、7 種敵人（雜魚 → 哥布林 → 公爵 → 冥盡 → 天光島 → 魔王 → Administrator）、3 職業、AI 隊友、文字指令 + 2D 街機格鬥 |
+| 註冊／登入（JWT + Argon2） | ✅ 完成 | `/api/auth/register`、`/login`、`/me`；第三輪加上每 IP 限流、帳號 3–20 字（英數中文底線） |
+| 雲端存讀檔 | ✅ 完成 | `/api/progress/save`、`load`、`clear`；劇情狀態存在 `users.game_progress`。第三輪起存檔**忽略經濟欄位**，讀檔時用伺服器 profile 覆蓋 |
+| 伺服器端經濟 | ✅ 第三輪完成 | 金幣、經驗、等級、道具、裝備存在 `player_profiles`，購買 / 劇情獎勵 / 戰鬥結算都由伺服器計算；舊存檔第一次呼叫 API 時自動遷移 |
+| 故事模式 `/play` | ✅ 可從頭玩到結局 | 19 個場景、7 種敵人、3 職業、AI 隊友、文字指令 + 2D 街機格鬥；第三輪加入訪客模式、5 步教學、劇情跳過 / 加速 |
+| 訪客模式 + 綁定帳號 | ✅ 第三輪完成 | 免註冊玩第一章（打倒雜魚老大），之後綁定帳號，伺服器只承認第一章可驗證的獎勵 |
 | 自由對戰 `/arena` | ✅ 完成 | 8 角色、4 場地、4 段 AI 難度、雙人同鍵盤 PvP／對電腦；與故事模式共用新的渲染引擎 |
-| 格鬥畫面 / 特效 | ✅ 第二輪完成 | 各職業 / Boss 專屬外型、招式特效、Boss 專屬機制、奧義 Cut-in、7+1 個關卡背景（第 9 節） |
-| 黑市 `/market` | ✅ 完成（前端計算） | 技能書、武器（可升階 +1～+3）、不死圖騰、轉職聖典；故事模式內也能開「快速黑市」 |
-| 公會 `/guild` | 🟡 假資料 | 4 個寫死的公會，「申請」只跳提示 |
+| 格鬥畫面 / 特效 | ✅ 第二輪完成 | 各職業 / Boss 專屬外型、招式特效、Boss 專屬機制、奧義 Cut-in、7+1 個關卡背景（第 9 節）；第三輪加詞綴特效、高 DPI 與自動降畫質 |
+| 黑市 `/market` | ✅ 伺服器計算 | 技能書、武器（可升階 +1～+3）、不死圖騰、轉職聖典；故事模式內也能開「快速黑市」；訪客不能購買 |
+| 隨機裝備 | ✅ 第三輪完成 | 護甲 / 飾品，5 種稀有度、1–3 條隨機詞綴；背包上限 40，可分解換金幣 |
+| 故障之塔 `/tower` | ✅ 第三輪完成 | 每層隨機敵人與詞綴，每 5 層 Boss，層間選祝福 |
+| 每日挑戰 `/daily` | ✅ 第三輪完成 | 全服同一關卡（台灣日期當種子），每日排行，首次通關送 300G + 裝備 |
+| 世界 Boss `/raid` | ✅ 第三輪完成 | 全服共用血條、每場 45 秒、即時戰報（WebSocket），倒下後所有參與者可領獎 |
+| 公會 `/guild` | ✅ 第三輪重寫 | 建立（1000G）、加入、退出、上限 30 人、每週公會 Boss、公會聊天 |
+| 非同步 PvP `/pvp` | ✅ 第三輪完成 | 挑戰真實玩家角色的 AI 分身（不足時補 Bot），Elo 積分 |
+| 排行榜 `/ranking` | ✅ 第三輪完成 | 等級、塔、PvP、每日、世界 Boss、公會（本週） |
+| 大廳、世界聊天 | ✅ 第三輪改成真資料 | 在線人數、世界 Boss、每日關卡、排行都來自伺服器；聊天室走 WebSocket |
 | 圖鑑 `/codex` | 🟡 靜態內容 | 指令與世界觀說明 |
-| 大廳、世界聊天 | 🟡 假資料 | 線上人數、新聞、聊天訊息都是隨機產生 |
 | 後端 characters API | ⚪ 有寫，前端沒用 | |
-| 後端 battles API | ⚪ 有寫，沒用且邏輯錯誤 | 勝利判定寫成「玩家 HP ≥ 敵人 HP」、敵人不會扣血 |
+| 舊 battles API | ⚪ 已移除 | 邏輯錯誤的舊版移到 `backups/2026-10-23_before-upgrade/`，改用新的 `/api/battle/start`、`/finish` |
 | `StoryWorldStage.tsx` | ⚪ 未使用 → 已移到 `backups/` | 878 行，沒有任何地方 import |
-| 部署 | 🟡 正式 build，但流程仍手動 | 前端已改正式 build（`deploy/update_frontend.sh`）；仍是手動上傳、IP 每次變、資安未處理 |
+| 自動化測試 | 🟡 只有後端 | `backend/tests/` 15 個 pytest（SQLite）；前端沒有自動化測試 |
+| 部署 | 🟡 正式 build，但流程仍手動 | 前端正式 build（`deploy/update_frontend.sh`）、Elastic IP、喚醒 Lambda；仍是手動 tar 上傳、資安未處理 |
 
-**整體評估**：遊戲內容已經相當完整，可以從頭玩到結局，還有獨立的格鬥模式。主要缺口有三個：「多人／社群功能是假的」、「伺服器完全不驗證遊戲數值」、「部署與資安」。
+**整體評估**：第三輪之後，多人與社群功能都是真的（伺服器資料 + WebSocket），遊戲數值也改由伺服器驗證。剩下的主要缺口是「部署與資安」（第 4 節）和「CI / 監控 / 壓力測試」（第 8 節）。
 
 ---
 
@@ -171,18 +187,18 @@ cd ~/CloudRPG && tar xzf ~/backups/pre-fix-20261022-155657.tgz && sudo systemctl
 
 - EC2 改用 `git clone` / `git pull` 取代 tar 上傳（tar 會帶進 Mac 的 `._*` 檔，版本也容易對不上，這次就發生了）。
 - 寫一支 `deploy.sh`：`git pull` → `pip install -r requirements.txt` → `npm ci` → build → `systemctl restart`。
-- 申請 Elastic IP，讓 IP 不再每次變；至少在 README 註明「重開 lab 後到 Console 看新 IP」。
+- ~~申請 Elastic IP，讓 IP 不再每次變~~ — ✅ `54.161.3.74` 已經是 Elastic IP。
 
 ### 6.3 安全
 
 - 先完成第 4 節。
 - 有網域的話用 `certbot --nginx` 上 HTTPS。
 - CORS 目前是 `allow_origins=["*"]` 加 `allow_credentials=True`，改成只允許自己的網域。
-- 登入 API 加 rate limit，防暴力破解。
+- ~~登入 API 加 rate limit，防暴力破解~~ — ✅ 第三輪完成：登入每 IP 每分鐘 10 次、註冊每 IP 每 10 分鐘 5 次，另有全域每 IP 每 10 秒 80 個請求（`RATE_LIMIT_PER_10S`）。
 
 ### 6.4 後端與資料
 
-- **伺服器端驗證**：`/api/progress/save` 完全相信前端送來的狀態，改 localStorage 就能把金幣、等級改成任意值。至少加上數值上限與合理性檢查；進一步可以把購買和戰鬥結算移到後端（`battles.py` 已經有雛形，但要先修邏輯）。
+- ~~**伺服器端驗證**：`/api/progress/save` 完全相信前端送來的狀態~~ — ✅ 第三輪完成：購買、劇情獎勵、戰鬥結算都移到後端，存檔忽略經濟欄位，戰鬥用伺服器量到的時間檢查（見 10.3）。
 - 進度可以改存到已經建好的 `characters` 表（JSONB），不要全部塞在 `users`。
 - 用 Alembic 做 migration，取代 `create_all`。
 - `requirements.txt` 用 `pip freeze` 鎖版本，避免下次 Python 升級又壞。
@@ -191,7 +207,7 @@ cd ~/CloudRPG && tar xzf ~/backups/pre-fix-20261022-155657.tgz && sudo systemctl
 ### 6.5 前端程式碼
 
 - `play.tsx` 約 1,300 行、`StoryBattleArena.tsx` 約 2,200 行、`arena.tsx` 約 1,600 行；後兩者有大量重複的格鬥引擎，可以抽成共用模組。
-- `API_URL` 的判斷邏輯重複在 4 個檔案，抽成 `lib/api.ts`，順便統一處理 401。
+- ~~`API_URL` 的判斷邏輯重複在 4 個檔案，抽成 `lib/api.ts`，順便統一處理 401~~ — ✅ 第三輪新增 `lib/api.ts`（自動帶 token、401 清登入、`keepalive`、WebSocket 自動重連）。
 - 自動同步：每次 state 或 log 變化都會重設 30 秒計時器，連續操作時可能一直不同步；`beforeunload` 裡的非同步 fetch 常被瀏覽器中斷。建議在場景切換、戰鬥結束時存檔，並使用 `fetch(..., { keepalive: true })`。
 - 遊戲 log 無限增長並整包上傳，建議只保留最近 200 行。
 - 逐步移除 `// @ts-nocheck`。
@@ -199,29 +215,31 @@ cd ~/CloudRPG && tar xzf ~/backups/pre-fix-20261022-155657.tgz && sudo systemctl
 ### 6.6 雲端架構（課程加分項）
 
 - CloudWatch Agent 收集 log 和 CPU／記憶體指標，設定 Alarm。
-- 開啟 RDS 自動備份與快照。
-- 靜態資源放 S3 + CloudFront。
+- ~~開啟 RDS 自動備份與快照~~ — ✅ 自動備份保留 7 天；第三輪部署前另做了手動快照 `cloudrpg-db-pre-round3-20261023`。
+- 靜態資源放 S3 + CloudFront（Learner Lab 不允許 CloudFront，目前做不到）。
 - 報告中列的 DynamoDB／Lambda 可擇一實作，例如用 Lambda 每天結算排行榜。
 
 ---
 
 ## 7. 讓遊戲更好玩的建議
 
+> 第三輪已完成：真的世界聊天、排行榜、新手教學、每日挑戰、真的公會、非同步 PvP、隨機裝備掉落（標 ✅）。
+
 ### 短期（1–3 天，效果最明顯）
 
-- **真的世界聊天**：FastAPI WebSocket 取代假的 bot 訊息，最能體現「Cloud」RPG。
-- **排行榜**：等級、通關時間、競技場勝場，存 RDS 並顯示在大廳，讓「線上人數」這類假資料變成真的。
-- **新手操作教學**：第一場戰鬥前顯示 WASD／F／G／R 的操作提示，避免玩家不知道怎麼動。
+- ✅ **真的世界聊天**：FastAPI WebSocket 取代假的 bot 訊息，最能體現「Cloud」RPG。
+- ✅ **排行榜**：等級、通關時間、競技場勝場，存 RDS 並顯示在大廳，讓「線上人數」這類假資料變成真的。
+- ✅ **新手操作教學**：第一場戰鬥前顯示 WASD／F／G／R 的操作提示，避免玩家不知道怎麼動。
 - **打擊感**：命中停頓（hit-stop）、畫面震動、連段計數、受擊閃白。
 - **成就系統**：首次通關、無傷擊敗公爵、集滿三顆傳說之石，存在 `story_flags`。
-- **每日任務／登入獎勵**：提高回訪率。
+- 🟡 **每日任務／登入獎勵**：提高回訪率。（已做「每日挑戰」，登入獎勵還沒做）
 
 ### 中期（1–2 週）
 
-- **真的公會**：建立、加入、公會聊天、公會排行。
-- **非同步 PvP（幽靈對戰）**：用其他玩家的角色資料加 AI 當對手，不需要即時連線也有多人感。
+- ✅ **真的公會**：建立、加入、公會聊天、公會排行。
+- ✅ **非同步 PvP（幽靈對戰）**：用其他玩家的角色資料加 AI 當對手，不需要即時連線也有多人感。
 - **線上即時 PvP**：WebSocket 房間，讓競技場可以兩台電腦對打（現在只能同一個鍵盤）。
-- **隨機裝備掉落**：沿用現有的稀有度顏色系統，加入隨機詞綴。
+- ✅ **隨機裝備掉落**：沿用現有的稀有度顏色系統，加入隨機詞綴。
 - **多結局**：依選擇和隊友存活狀況走向不同結局；Administrator 戰加入第二階段。
 - **手機支援**：虛擬搖桿和按鈕。
 - **每張地圖不同 BGM**。
@@ -244,7 +262,17 @@ cd ~/CloudRPG && tar xzf ~/backups/pre-fix-20261022-155657.tgz && sudo systemctl
 - [x] 前端改正式 build（2026-10-23）
 - [x] 格鬥畫面升級、Boss 專屬機制、武器外觀與黑市整合（2026-10-23）
 - [x] commit 第二輪新增的 `battleFx.ts`、`ShopModal.tsx`、`lib/shop.ts`、`deploy/` 資料夾，新增中英文 `README.md`
-- [ ] 挑 1–2 個遊戲功能實作（建議：排行榜 + WebSocket 聊天）
+- [x] 遊戲功能：排行榜 + WebSocket 聊天，以及塔、每日、世界 Boss、公會、PvP、訪客模式（第三輪，2026-10-23，`278fb33`）
+- [x] Nginx 加 `/api/ws` WebSocket 設定（2026-10-23）
+- [ ] 正式站的 `ADMIN_USERNAMES` 決定要不要留 `admin`（第 4 節第 5 點）
+- [ ] 實機測試塔 / PvP / 公會（需要登入；正式站只驗證了公開頁面）
+- [ ] 實測喚醒頁「EC2 關機 → 自動開機」完整流程
+- [ ] EC2 磁碟只剩約 720 MB：清 npm 快取（`npm cache clean --force`）或刪舊備份
+- [ ] GitHub Actions CI（pytest + `npm run build`）；Learner Lab 憑證會過期，自動部署建議改「EC2 定時 git pull」
+- [ ] k6 / Locust 壓力測試腳本
+- [ ] Sentry：`requirements.txt` 加 `sentry-sdk[fastapi]`，`backend/.env` 設 `SENTRY_DSN`（程式已支援）
+- [ ] CloudWatch 告警（EC2 沒有 instance profile，記憶體指標需要 CloudWatch Agent）
+- [ ] 手機虛擬搖桿
 
 ---
 
@@ -328,14 +356,99 @@ cd ~/CloudRPG && tar xzf ~/backups/pre-fix-20261022-155657.tgz && sudo systemctl
 - 本機 `npm run build` 與 EC2 build 都成功；EC2 上 `/`、`/arena`、`/play`、`/market`、`/login`、`/health` 全部 200
 - 在瀏覽器實際測試：/arena 戰士 vs RYU、法師 vs 公爵；故事模式哥布林、雜魚老大、冥盡洞主（冰刺、黑水減速）、天光島嶼之主（三重落雷、牧師回血聖光柱）、魔王、Administrator（半血超頻、全畫面雷射、數據方塊、奧義 Cut-in）
 - 快速黑市：開啟後戰鬥幀數停止（暫停）；購買升階後金幣扣款、裝備名稱更新為 `+2`、戰鬥中攻擊倍率即時更新
-- 已知限制：沒有自動化測試；畫面效果以 Canvas 2D 繪製，舊電腦或手機上若掉幀，可把 `battleFx.ts` 的粒子上限（420）調低
+- 已知限制：沒有自動化測試；畫面效果以 Canvas 2D 繪製，舊電腦或手機上若掉幀，可把 `battleFx.ts` 的粒子上限（420）調低（第三輪已加自動降畫質）
+
+---
+
+## 10. 第三輪：多人線上化（2026-10-23，commit `278fb33`）
+
+目標：把專案從「單機遊戲 + 雲端存檔」改成「可以給很多人一起玩、不能作弊的線上遊戲」。
+
+### 10.1 新玩法
+
+| 模式 | 頁面 | 規則 |
+|---|---|---|
+| 訪客模式 | `/play` | 免註冊直接玩第一章（打倒雜魚老大），之後跳出「綁定帳號」；綁定時伺服器只承認第一章可驗證的獎勵 |
+| 新手教學 | `/play` | 第一場戰鬥 5 步操作教學；劇情文字可跳過 / 加速（`skip` 指令） |
+| 隨機裝備 | 遊戲內 `gear` 指令 / 黑市「裝備背包」分頁 | 護甲、飾品兩個欄位；普通 / 稀有 / 史詩 / 傳說 / 神話 5 種稀有度，1–3 條詞綴（攻擊、生命、魔力、氣條、移速）；背包上限 40，可分解換金幣；裝備神話級會讓武器發出紅色光暈 |
+| 故障之塔 | `/tower` | 每層隨機敵人，第 3 層起有詞綴（狂暴、玻璃大砲、全場黑水、雷暴、分身、再生、迷霧、巨大化），越高越多；血量跨層延續；每通過一層選一個祝福（回血 / 攻擊 / 草藥 / 氣條）；每 5 層 Boss 保底稀有以上裝備 |
+| 每日挑戰 | `/daily` | 全服同一個關卡（以台灣日期為種子），台灣時間 0 點更新；分數 = 通關 + 剩餘血量 + 速度 + 最高連擊；每天首次通關送 300G + 一件裝備 |
+| 世界 Boss | `/raid` | 全伺服器共用一條血條，每場 45 秒，傷害直接扣在共享血量上（資料庫原子扣血）；即時戰報與在線人數走 WebSocket；倒下後所有參與者可領獎，下一隻更強 |
+| 公會 | `/guild` | 建立（1000G，標籤 2–5 字）、加入、退出，上限 30 人；每週一隻公會 Boss（血量依人數調整）；公會聊天頻道；公會週排行 |
+| 非同步 PvP | `/pvp` | 對手是積分相近的真實玩家角色（由 AI 操控），人數不夠時補 Bot；Elo 積分（起始 1000，K=32） |
+| 排行榜 | `/ranking` | 等級、故障之塔、PvP 積分、今日挑戰、世界 Boss、公會（本週） |
+| 聊天室 | 大廳 / raid / 遊戲內 | 世界頻道 + 公會頻道，WebSocket 即時推播，斷線自動重連；每則 140 字、限速 |
+
+### 10.2 新 API 一覽
+
+| 分類 | 端點 |
+|---|---|
+| 角色資料 | `GET /api/profile`、`POST /api/profile/create`、`POST /api/profile/import-guest` |
+| 經濟 | `POST /api/shop/buy`、`POST /api/shop/transfer`（轉職）、`POST /api/story/claim`、`POST /api/gear/equip`、`POST /api/gear/salvage` |
+| 戰鬥 | `POST /api/battle/start`（發戰鬥憑證）、`POST /api/battle/finish`（mode：story / tower / daily / worldboss / guildboss / pvp） |
+| 故障之塔 | `GET /api/tower`、`POST /api/tower/start`、`POST /api/tower/blessing`、`POST /api/tower/abandon` |
+| 每日 / 世界 Boss | `GET /api/daily`、`GET /api/worldboss`、`POST /api/worldboss/claim` |
+| 公會 | `GET /api/guilds`、`GET /api/guilds/mine`、`POST /api/guilds`、`POST /api/guilds/{id}/join`、`POST /api/guilds/leave`、`POST /api/guilds/boss/claim` |
+| PvP / 排行 | `GET /api/pvp/opponents`、`GET /api/leaderboard/{level,tower,pvp,daily,worldboss,guild}` |
+| 社群 | `GET/POST /api/chat/{world,guild}`、WebSocket `/api/ws?token=`、`POST /api/telemetry/error`（前端錯誤回報） |
+
+### 10.3 防作弊與穩定性
+
+- **經濟只在伺服器**：金幣、經驗、等級、道具、裝備存在 `player_profiles`；`/api/progress/save` 會忽略這些欄位，讀檔時用伺服器資料覆蓋。改 localStorage 不再有用。
+- **戰鬥憑證**：開戰時伺服器發一張一次性憑證並記下時間；結算時用伺服器量到的經過時間檢查「最快可能獲勝時間」（`min_win_ms`）與「最大可能傷害」（`damage_cap`），同一張憑證不能結算兩次。
+- **限流**：記憶體滑動視窗（Nginx 後用 `X-Real-IP`）：全域每 IP 每 10 秒 80 個請求；登入、註冊、開戰、結算、購買、公會、聊天、WebSocket 連線各有獨立上限。
+- **可替換架構**：限流與 WebSocket Hub 都包成單一類別，將來多台後端時換成 Redis 即可。
+- **前端**：高 DPI canvas + 掉幀時自動降畫質；全域錯誤回報到 `/api/telemetry/error`。
+- **測試**：`backend/tests/` 15 個 pytest（SQLite），涵蓋經濟規則、存檔防作弊、戰鬥時間驗證、憑證重複結算、世界 Boss 共享血量、塔、每日、公會 + 聊天 + 限流、PvP Elo、訪客匯入、WebSocket 推播。
+
+### 10.4 新增 / 修改的檔案
+
+| 檔案 | 內容 |
+|---|---|
+| `backend/app/game/data.py`、`economy.py`、`services.py`（新） | 數值表、純函式遊戲規則（升級、購買、掉寶、塔 / 每日生成、防作弊上限、Elo、舊存檔遷移）、DB 輔助 |
+| `backend/app/models/game.py`（新） | 新資料表 `player_profiles`、`battle_sessions`、`tower_runs`、`daily_scores`、`raid_bosses`、`raid_damage`、`guilds`、`guild_members`、`chat_messages`、`pvp_matches`（啟動時 `create_all` 自動建立，不動舊表） |
+| `backend/app/api/profile.py`、`combat.py`、`modes.py`、`social.py`（新） | 10.2 的 API |
+| `backend/app/core/deps.py`、`ratelimit.py`、`app/realtime.py`（新） | Bearer 驗證、限流、WebSocket Hub |
+| `backend/app/core/config.py` | 新設定 `ADMIN_USERNAMES`、`SENTRY_DSN`、`RATE_LIMIT_PER_10S` |
+| `backend/tests/`（新） | pytest |
+| `fronted/src/lib/api.ts`、`classes.ts`、`gear.ts`、`useProfile.ts`、`telemetry.ts`（新） | API 工具 + WebSocket、職業資料、稀有度顯示、讀 profile、錯誤回報 |
+| `fronted/src/components/crpg/ModeBattle.tsx`、`ChatPanel.tsx`、`GearPanel.tsx`、`BindAccountModal.tsx`、`GameUI.tsx`（新） | 伺服器驗證戰鬥流程、聊天室、裝備背包、綁定帳號、共用 UI |
+| `fronted/src/routes/tower.tsx`、`daily.tsx`、`raid.tsx`、`pvp.tsx`、`ranking.tsx`（新）、`guild.tsx`（重寫） | 新模式頁面 |
+| `fronted/src/routes/play.tsx`、`index.tsx`、`market.tsx`、`StoryBattleArena.tsx`、`battleFx.ts`、`ShopModal.tsx`、`Shell.tsx` | 接上伺服器經濟、大廳即時資料、詞綴特效、導覽列新增 TOWER / DAILY / RAID / PVP / RANK |
+| `deploy/wake_lambda/lambda_function.py`（新） | 喚醒頁 Lambda |
+
+### 10.5 部署紀錄（已套用在 EC2）
+
+1. 備份：EC2 `~/backups/pre-round3-20261023-071904.tgz`（`backend/app`、`fronted/src`、`fronted/dist`、`deploy`、Nginx 設定）＋ RDS 手動快照 `cloudrpg-db-pre-round3-20261023`
+2. 上傳 `backend/app`、`fronted/src`、`deploy/`；刪除 EC2 上已不再使用的舊 `backend/app/api/battle.py`
+3. Nginx 加 `location /api/ws`（WebSocket upgrade）→ `nginx -t` → reload
+4. `sudo systemctl restart cloudrpg-backend`：新表在 PostgreSQL 上自動建立
+5. `bash ~/CloudRPG/deploy/update_frontend.sh`（build 約 28 秒）
+
+回滾：
+
+```bash
+cd ~/CloudRPG && tar xzf ~/backups/pre-round3-20261023-071904.tgz backend/app fronted/src fronted/dist deploy \
+  && sudo systemctl restart cloudrpg-backend cloudrpg-frontend
+# Nginx 設定在同一個備份裡：sudo tar xzf ~/backups/pre-round3-20261023-071904.tgz -C / etc/nginx/sites-available/default && sudo systemctl reload nginx
+```
+
+> 注意：tar 解壓只會覆蓋舊檔，不會刪掉第三輪新增的檔案；舊版 `main.py` 不會 import 新檔案，所以不影響執行。資料庫新表留著不會影響舊版；要完全還原資料請用 RDS 快照。
+
+### 10.6 驗證
+
+- 本機：pytest 15/15 通過；`npm run build` 成功
+- 正式站 API（PostgreSQL）：`/health`、`/api/worldboss`、`/api/daily`、6 個排行榜、`/api/guilds`、`/api/chat/world` 全部 200
+- WebSocket：從外部經 Nginx 連 `/api/ws` → `101 Switching Protocols`，收到 `{"type":"hello","online":1}`；開第二條連線後，raid 頁的「X 人在線」自動從 1 變成 2
+- 瀏覽器：大廳（即時在線人數、世界 Boss、每日關卡）、`/raid`、`/daily`、`/ranking`、`/play`（訪客選職業）都正常，console 沒有錯誤；`/tower`、`/pvp`、`/guild` 未登入時導到登入頁
+- **還沒驗證**：登入後實際玩塔 / PvP / 公會（正式站不替使用者建立測試帳號）；喚醒頁「關機 → 自動開機」
 
 ---
 
 ## 附錄：Learner Lab 重開後的檢查步驟
 
-1. Start Lab → 等 EC2 變成 running → 在 EC2 Console 查看新的 Public IPv4。
-2. 開 `http://<新IP>/`；`http://<新IP>/health` 應該回 `{"status":"ok"}`。
+1. Start Lab → 等 EC2 變成 running。IP 是 Elastic IP，固定是 `54.161.3.74`。
+2. 開 `http://54.161.3.74/`；`http://54.161.3.74/health` 應該回 `{"status":"ok"}`。EC2 關機時可以改開喚醒網址（第 1 節），它會自動開機並在啟動後轉回遊戲。
 3. 三個服務都設了開機自動啟動，不需要手動開；如果看到 502，照 `TROUBLESHOOTING.md` 處理。
-4. 前端的 API 位址會自動跟著網址走（從 port 80 進入時），IP 變了不用改程式。
+4. 前端的 API 與 WebSocket 位址會自動跟著網址走（從 port 80 進入時），不需要改程式。
 5. 要登入主機：EC2 Console → Connect → **EC2 Instance Connect**（這台沒有 .pem 金鑰）。

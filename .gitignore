@@ -31,3 +31,5 @@ dist-ssr
 *.sln
 *.sw?
 venv
+# 本機 SQLite 開發 / 測試資料庫
+*.db
