@@ -139,7 +139,7 @@ uvicorn app.main:app --reload --port 8000
 DATABASE_URL=sqlite:///./dev.db SECRET_KEY=local-dev-only ADMIN_USERNAMES= uvicorn app.main:app --port 8000
 ```
 
-新資料表會在啟動時自動建立。選填設定：`ADMIN_USERNAMES`（逗號分隔的管理員帳號，黑市免費；預設 `admin`，留空 = 沒有管理員）、`RATE_LIMIT_PER_10S`（每 IP 每 10 秒請求上限，預設 80）、`SENTRY_DSN`。
+新資料表會在啟動時自動建立。選填設定：`ADMIN_USERNAMES`（逗號分隔的管理員帳號，黑市免費；預設 `admin`，留空 = 沒有管理員）、`RATE_LIMIT_PER_10S`（每 IP 每 10 秒請求上限，預設 80）、`SENTRY_DSN`（見下方「錯誤監控」）。
 
 **測試**
 
@@ -172,6 +172,30 @@ npm run dev                     # http://localhost:4173
 
 3. Nginx：`/api/ws` 轉到 `127.0.0.1:8000` 並開啟 WebSocket upgrade（`Upgrade` / `Connection` 標頭、`proxy_read_timeout 3600s`）；`/api/` 與 `/health` 轉到 `127.0.0.1:8000`；其餘轉到 `127.0.0.1:4173`。
 4. EC2 使用 Elastic IP（`54.161.3.74`），重開 lab 後 IP 不變。EC2 關機時可以開喚醒網址（`deploy/wake_lambda/`），它會自動開機並在伺服器就緒後轉回遊戲。
+
+### 錯誤監控（Sentry，選填）
+
+前端錯誤不直接連 Sentry，而是先送到後端 `/api/telemetry/error` 再轉送，所以整個專案只需要**一組 DSN**，前端也不用另外載入 Sentry SDK。
+
+| 來源 | 回報內容 |
+|---|---|
+| 後端 | 未處理的例外（HTTP 5xx），標記是哪個玩家（id / 帳號名稱） |
+| 瀏覽器 | 未捕捉的錯誤、未處理的 Promise rejection、路由錯誤畫面；標籤 `source=browser`、`page=<路徑>` |
+| 前端 SSR | 伺服器端渲染失敗；標籤 `source=ssr` |
+
+同一則錯誤會歸在同一個 Sentry issue；前端同一則錯誤 10 分鐘內只送一次。不會收集 IP 和請求內容。
+
+啟用方式（EC2）：
+
+1. 在 [sentry.io](https://sentry.io) 建立 Python（FastAPI）專案，複製 DSN。
+2. 在 `~/CloudRPG/backend/.env` 加上 `SENTRY_DSN=<你的 DSN>`（選填：`SENTRY_ENVIRONMENT`，預設 `production`；`SENTRY_TRACES_SAMPLE_RATE`，預設 `0.05`）。
+3. 安裝套件並重啟：
+
+   ```bash
+   cd ~/CloudRPG/backend && venv/bin/pip install -r requirements.txt && sudo systemctl restart cloudrpg-backend
+   ```
+
+4. `journalctl -u cloudrpg-backend -n 50 | grep Sentry` 應該看到 `Sentry enabled`。沒有設定 DSN 時一切照常，錯誤只會寫進後端 log。
 
 更多細節、部署紀錄與故障排除請看 [PROJECT_STATUS.md](PROJECT_STATUS.md) 與 [TROUBLESHOOTING.md](TROUBLESHOOTING.md)。
 
@@ -305,7 +329,7 @@ To run without RDS, use SQLite:
 DATABASE_URL=sqlite:///./dev.db SECRET_KEY=local-dev-only ADMIN_USERNAMES= uvicorn app.main:app --port 8000
 ```
 
-New tables are created automatically on startup. Optional settings: `ADMIN_USERNAMES` (comma-separated admin accounts that shop for free; defaults to `admin`, empty = no admins), `RATE_LIMIT_PER_10S` (requests per IP per 10 seconds, default 80), `SENTRY_DSN`.
+New tables are created automatically on startup. Optional settings: `ADMIN_USERNAMES` (comma-separated admin accounts that shop for free; defaults to `admin`, empty = no admins), `RATE_LIMIT_PER_10S` (requests per IP per 10 seconds, default 80), `SENTRY_DSN` (see "Error monitoring" below).
 
 **Tests**
 
@@ -338,5 +362,29 @@ The frontend picks the API and WebSocket address automatically: same origin when
 
 3. Nginx: `/api/ws` goes to `127.0.0.1:8000` with WebSocket upgrade enabled (`Upgrade` / `Connection` headers, `proxy_read_timeout 3600s`); `/api/` and `/health` go to `127.0.0.1:8000`; everything else goes to `127.0.0.1:4173`.
 4. The instance uses an Elastic IP (`54.161.3.74`), so the address survives lab restarts. When the instance is stopped, open the wake-up URL (`deploy/wake_lambda/`): it starts the instance and redirects back to the game once the server is ready.
+
+### Error monitoring (Sentry, optional)
+
+Frontend errors do not talk to Sentry directly: they go to the backend's `/api/telemetry/error`, which forwards them. The whole project therefore needs **one DSN**, and the frontend ships no Sentry SDK.
+
+| Source | What is reported |
+|---|---|
+| Backend | Unhandled exceptions (HTTP 5xx), tagged with the player (id / username) |
+| Browser | Uncaught errors, unhandled promise rejections, route error screens; tags `source=browser`, `page=<path>` |
+| Frontend SSR | Server-side rendering failures; tag `source=ssr` |
+
+The same error is grouped into one Sentry issue, and the frontend sends a given error at most once every 10 minutes. IP addresses and request bodies are not collected.
+
+To enable it on EC2:
+
+1. Create a Python (FastAPI) project on [sentry.io](https://sentry.io) and copy its DSN.
+2. Add `SENTRY_DSN=<your DSN>` to `~/CloudRPG/backend/.env` (optional: `SENTRY_ENVIRONMENT`, default `production`; `SENTRY_TRACES_SAMPLE_RATE`, default `0.05`).
+3. Install the package and restart:
+
+   ```bash
+   cd ~/CloudRPG/backend && venv/bin/pip install -r requirements.txt && sudo systemctl restart cloudrpg-backend
+   ```
+
+4. `journalctl -u cloudrpg-backend -n 50 | grep Sentry` should print `Sentry enabled`. Without a DSN nothing changes; errors are only written to the backend log.
 
 See [PROJECT_STATUS.md](PROJECT_STATUS.md) and [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for details, the deployment log and troubleshooting.

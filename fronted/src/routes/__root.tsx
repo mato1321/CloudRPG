@@ -10,7 +10,7 @@ import {
 
 import appCss from "../styles.css?url";
 import { useEffect } from "react";
-import { installErrorReporting } from "../lib/telemetry";
+import { installErrorReporting, reportError } from "../lib/telemetry";
 
 function NotFoundComponent() {
   return (
@@ -36,6 +36,7 @@ function NotFoundComponent() {
 
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
+  useEffect(() => reportError(error), [error]);
   const router = useRouter();
 
   return (

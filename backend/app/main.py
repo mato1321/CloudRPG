@@ -5,20 +5,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.core.config import settings
+from app.core.monitoring import init_sentry
 from app.core.ratelimit import client_ip, limiter
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# 選填：設定 SENTRY_DSN 後，後端例外會送到 Sentry
-if settings.SENTRY_DSN:
-    try:
-        import sentry_sdk
-
-        sentry_sdk.init(dsn=settings.SENTRY_DSN, traces_sample_rate=0.05)
-        logger.info("Sentry enabled")
-    except ImportError:
-        logger.warning("SENTRY_DSN 已設定，但沒有安裝 sentry-sdk")
+# 選填：設定 SENTRY_DSN 後，後端例外與前端回報的錯誤都會送到 Sentry（要在建立 app 之前初始化）
+init_sentry()
 
 from app.db.database import Base, engine
 from app.models import game as _game_models  # noqa: F401 讓 create_all 建立新資料表

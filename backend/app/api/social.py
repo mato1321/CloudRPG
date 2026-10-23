@@ -1,13 +1,14 @@
 """世界聊天 / 公會聊天（REST 讀寫 + WebSocket 即時推播）與前端錯誤回報。"""
 import logging
 import re
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.deps import _user_from_header, get_current_user, get_optional_user
+from app.core.monitoring import capture_client_error
 from app.core.ratelimit import client_ip, enforce, limiter
 from app.db.database import SessionLocal, get_db
 from app.game import services as S
@@ -112,14 +113,17 @@ async def ws_endpoint(ws: WebSocket, token: Optional[str] = None):
 
 
 class ClientError(BaseModel):
+    source: Literal["browser", "ssr"] = "browser"
     message: str = Field(max_length=500)
     stack: str = Field(default="", max_length=4000)
     url: str = Field(default="", max_length=300)
 
 
 @router.post("/api/telemetry/error")
-def client_error(req: ClientError, request: Request):
-    """前端錯誤回報：寫進後端 log（journalctl 看得到；之後可接 CloudWatch Logs / Sentry）"""
+def client_error(req: ClientError, request: Request, user: Optional[User] = Depends(get_optional_user)):
+    """前端錯誤回報：寫進後端 log（journalctl 看得到），有設定 SENTRY_DSN 時再轉送到 Sentry"""
     enforce(f"telemetry:{client_ip(request)}", 10, 60)
-    logger.warning("client error at %s: %s\n%s", req.url, req.message, req.stack[:1500])
+    logger.warning("%s error at %s: %s\n%s", req.source, req.url, req.message, req.stack[:1500])
+    capture_client_error(req.source, req.message, req.stack, req.url,
+                         request.headers.get("user-agent", "")[:300], user)
     return {"ok": True}

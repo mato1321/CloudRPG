@@ -5,6 +5,7 @@ from fastapi import Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.monitoring import set_user
 from app.core.security import decode_token
 from app.db.database import get_db
 from app.models.user import User
@@ -30,6 +31,7 @@ def get_current_user(authorization: Optional[str] = Header(None), db: Session = 
     user = _user_from_header(authorization, db)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
+    set_user(user)  # Sentry 事件會標記是哪個玩家遇到錯誤
     return user
 
 

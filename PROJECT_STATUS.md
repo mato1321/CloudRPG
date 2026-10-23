@@ -271,7 +271,8 @@ cd ~/CloudRPG && tar xzf ~/backups/pre-fix-20261022-155657.tgz && sudo systemctl
 - [x] GitHub Actions CI（`.github/workflows/ci.yml`：pytest on Python 3.11 / 3.14 + 前端 `npm ci` + `npm run build` + TEMP-DEBUG 檢查；push 到 main 與 PR 時執行）
 - [ ] 自動部署：Learner Lab 憑證會過期，不適合放 GitHub Secrets，建議改「EC2 定時 git pull」
 - [ ] k6 / Locust 壓力測試腳本
-- [ ] Sentry：`requirements.txt` 加 `sentry-sdk[fastapi]`，`backend/.env` 設 `SENTRY_DSN`（程式已支援）
+- [x] Sentry 程式整合：`requirements.txt` 加 `sentry-sdk[fastapi]`；後端例外 + 瀏覽器 / SSR 錯誤（經 `/api/telemetry/error` 轉送）共用一組 DSN（`backend/app/core/monitoring.py`、`tests/test_monitoring.py` 5 個測試；沒裝 sentry-sdk 時後端照常啟動）
+- [ ] Sentry 上線：到 sentry.io 建專案取得 DSN → EC2 `backend/.env` 加 `SENTRY_DSN` → `venv/bin/pip install -r requirements.txt` → 重啟後端（步驟見 README「錯誤監控」）
 - [ ] CloudWatch 告警（EC2 沒有 instance profile，記憶體指標需要 CloudWatch Agent）
 - [ ] 手機虛擬搖桿
 
@@ -400,6 +401,7 @@ cd ~/CloudRPG && tar xzf ~/backups/pre-fix-20261022-155657.tgz && sudo systemctl
 - **限流**：記憶體滑動視窗（Nginx 後用 `X-Real-IP`）：全域每 IP 每 10 秒 80 個請求；登入、註冊、開戰、結算、購買、公會、聊天、WebSocket 連線各有獨立上限。
 - **可替換架構**：限流與 WebSocket Hub 都包成單一類別，將來多台後端時換成 Redis 即可。
 - **前端**：高 DPI canvas + 掉幀時自動降畫質；全域錯誤回報到 `/api/telemetry/error`。
+- **錯誤監控（之後補上）**：設定 `SENTRY_DSN` 後，後端例外與前端回報的錯誤（瀏覽器、路由錯誤畫面、SSR）都會送到 Sentry，見 README「錯誤監控」。
 - **測試**：`backend/tests/` 15 個 pytest（SQLite），涵蓋經濟規則、存檔防作弊、戰鬥時間驗證、憑證重複結算、世界 Boss 共享血量、塔、每日、公會 + 聊天 + 限流、PvP Elo、訪客匯入、WebSocket 推播。
 
 ### 10.4 新增 / 修改的檔案
