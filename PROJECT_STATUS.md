@@ -269,7 +269,8 @@ cd ~/CloudRPG && tar xzf ~/backups/pre-fix-20261022-155657.tgz && sudo systemctl
 - [x] 正式站 `ADMIN_USERNAMES=`（沒有管理員；前端也改成看伺服器判斷）
 - [x] 實機測試塔 / PvP / 公會（使用者用自己的帳號測過，2026-10-23）
 - [x] 商城頂部不顯示金幣（`TopBar` 沒有畫出 `headerExtra`，第四輪修正）
-- [ ] 實測喚醒頁「EC2 關機 → 自動開機」完整流程
+- [x] 實測喚醒頁：**Learner Lab 關閉後無法自動開機**（AWS API 全部被 `voc-cancel-cred` 拒絕），喚醒頁改成顯示「伺服器休眠中」（第 12 節）
+- [ ] 把新版喚醒 Lambda 部署上去（需要有效的 Learner Lab 憑證，步驟見 12.5）
 - [x] EC2 磁碟清理（apt 快取、舊 snap）+ apt 自動清理設定
 - [ ] EBS 根磁碟加大到 12 GB 以上（目前 6.7 GB，核心更新與 node_modules 很容易又吃滿）
 - [x] GitHub Actions CI（`.github/workflows/ci.yml`：pytest on Python 3.11 / 3.14 + 前端 `npm ci` + `npm run build` + TEMP-DEBUG 檢查；push 到 main 與 PR 時執行）
@@ -280,7 +281,8 @@ cd ~/CloudRPG && tar xzf ~/backups/pre-fix-20261022-155657.tgz && sudo systemctl
 - [ ] ~~Sentry 上線~~（決定不使用；程式沒有 DSN 時不會動作）
 - [x] CloudWatch Agent + 8 個告警（第四輪）
 - [ ] 告警通知：在 SNS 主題 `cloudrpg-alerts` 訂閱 email（需要到信箱點確認）
-- [ ] 手機虛擬搖桿
+- [x] 手機虛擬搖桿（第五輪）
+- [x] 音效與背景音樂、平衡調整、線上即時對戰（第五輪）
 
 ---
 
@@ -515,6 +517,64 @@ cd ~/CloudRPG && tar xzf ~/backups/pre-round3-20261023-071904.tgz backend/app fr
 
 - **商城不顯示金幣**：`TopBar` 收到 `headerExtra` 卻從來沒畫出來，所以商城和故事模式頂部的職業 / 金幣都消失了。已修正（`be821df`）。
 - `deploy/update_frontend.sh` 只等 5 秒就檢查前端，vite preview 啟動較慢時會誤判失敗。改成最多等 60 秒（`1f4b258`）。
+
+---
+
+## 12. 第五輪：手機操作、音效、平衡、即時 PvP（2026-10-23）
+
+### 12.1 介面
+- 移除所有按鈕、標題、說明、格鬥飄字、黑市訊息裡的 emoji（保留格鬥畫面裡當圖案畫的魔法星芒與回合勝場星星）。
+- 商城頂部不顯示金幣：`TopBar` 沒有畫出 `headerExtra`（已修）。
+
+### 12.2 手機操作
+- `components/crpg/TouchControls.tsx`：左下虛擬搖桿（上推跳、下推蹲、左右移動）、右下招式按鍵。直接送出跟鍵盤一樣的 `keydown` / `keyup`，所以格鬥引擎不用改。
+- 觸控裝置自動顯示（桌機可用 `?touch=1` 強制顯示）；只有格鬥畫面在畫面上時才出現，不會蓋住選單。用 portal 掛在 `body`，避免外層 CSS 讓 `position: fixed` 失效。
+- 已在手機尺寸（375×812）實測：按鍵送出 `KeyF`，搖桿往右送 `KeyD`、往左下送 `KeyA + KeyS`。
+
+### 12.3 音效與背景音樂
+- `lib/audio.ts`：全部用 Web Audio 即時合成，不需要任何音檔。音效與音樂分開的音量、靜音設定存在 localStorage，第一次點擊 / 按鍵時解鎖（瀏覽器規定）。
+- 音效：輕攻 / 重攻 / 掃堂 / 跳 / 衝刺 / 命中（輕 / 重）/ 格擋 / 三職業各自的遠程技能 / 奧義 / 回血 / 隊友支援 / KO / 勝利 / 失敗 / 掉寶 / 升級 / 傳送；Boss 機關各有音效（冰刺、黑水、落雷、格式化光束、全畫面雷射、數據方塊、分身突進、超頻警報）。命中音效放在共用的 `FX.onHit`，故事戰鬥和自由對戰都有。
+- 背景音樂：程式產生的 chiptune 編曲（貝斯、琶音、旋律、鼓），大廳、教室、故障空間、荒野、村莊、魔王城 6 首探索曲，加上 10 首戰鬥曲（每個 Boss 場地、自由對戰、世界 Boss、故障之塔）。
+- 右上角 `SOUND:ON/OFF` 全站開關。
+
+### 12.4 平衡調整
+- 新增 `GET /api/admin/balance`（只有管理員）：從真實戰鬥紀錄統計各模式 / 敵人的場數、勝率、平均戰鬥秒數、剩餘血量、金幣收入，以及玩家金幣與等級分布。現在只有少數玩家，數據不夠；之後有人玩了就用這個看哪裡太簡單 / 太難 / 會被拿來刷錢。
+- `backend/tools/economy_sim.py`：用遊戲本身的數值估算每種刷錢策略的收入，調整前後比較：
+
+| 策略 | 調整前 G/小時 | 調整後 G/小時 | 調整前 一天玩 4 小時 | 調整後 一天玩 4 小時 |
+|---|---:|---:|---:|---:|
+| 刷哥布林（Lv5） | 40,615 | 20,308 | 162,462 | 21,623 |
+| 刷羅劫公爵（Lv5） | 83,077 | 20,769 | 332,308 | 21,807 |
+| **重刷 Administrator（Lv30）** | **1,845,969** | 92,298 | **7,383,877** | 30,000 |
+| 故障之塔爬到 60 樓 | 150,737 | 134,250 | 602,949 | 30,000 |
+| PvP 一直打 Bot | 5,538 | 200 | 22,154 | 800 |
+| 世界 Boss | 13,137 | 13,137 | 52,547 | 18,754 |
+
+  黑市所有一次性商品買齊只要 26,800G，舊規則下重刷 Administrator 一小時就能賺到 185 萬，金幣完全失去意義。
+- 新規則（`app/game/data.py`）：
+  - 故事敵人**重複擊敗**只給部分獎勵：小怪 50%、Boss 25%、Administrator 5%（第一次擊敗全額）
+  - **每日金幣軟上限** 15,000G：超過後戰鬥金幣只給 10%；**硬上限** 30,000G / 天
+  - 故障之塔金幣只算到第 40 層（經驗照常成長）
+  - PvP 打贏 Bot 20G、真人 80G，每天只有前 10 場勝利給金幣
+  - 戰鬥紀錄新增剩餘血量（`hpRatio`），給平衡報表用
+- 測試：`tests/test_balance.py`（5 個）
+
+### 12.5 線上即時對戰
+- 架構：**房主權威 + 狀態串流**。房主的瀏覽器跑完整模擬，對手只送按鍵、畫房主傳來的狀態（每秒約 24 次、每次 1–2 KB，粒子特效由對手依狀態變化自己產生）。伺服器只做配對與轉送（`app/duel.py`、WebSocket `/api/ws/duel`，路徑放在 `/api/ws` 底下所以不用改 Nginx）。
+- 自由對戰頁新增「線上即時對戰」：快速配對、建立房間（4 碼房號）、用房號加入；需要登入。友誼賽：不影響積分與金幣，結果記在 `pvp_matches`（`defender_ref = duel:<對手 id>`）。
+- 延遲：兩位玩家都在台灣時，按鍵要經過美東的伺服器，大約 0.3–0.5 秒。要更順需要 rollback netcode 或把伺服器放在台灣附近。
+- 驗證：後端 `tests/test_duel.py`（2 個）；瀏覽器用兩個帳號實測配對成功、對手的移動與技能出現在房主畫面、對手畫面畫出房主傳來的狀態。
+- 順便修正：WebSocket 限流原本用 `ws.client.host`，在 Nginx 後面全部是 `127.0.0.1`，等於全站共用「每分鐘 20 次連線」；改用 `X-Real-IP`。
+
+### 12.6 Learner Lab 關閉時能不能自動開機？
+- 實測（2026-10-23 lab 結束後）：**不行**。Lab 結束後，AWS 會用 `voc-cancel-cred` 政策拒絕所有 API，喚醒 Lambda 呼叫 EC2 失敗（原本回 502）；Learner Lab 本身也只能由使用者登入 AWS Academy 手動按 Start Lab，沒有可以從外部呼叫的 API。
+- 喚醒頁改善（`deploy/wake_lambda/lambda_function.py`）：遊戲正常時直接轉址（不呼叫 AWS API）；lab 關閉時顯示「伺服器休眠中，請通知管理員 Start Lab」並每 30 秒自動重新檢查；lab 開著但 EC2 關機時照樣自動開機。
+- 部署新版 Lambda（需要有效憑證）：
+  ```bash
+  cd deploy/wake_lambda && zip -q fn.zip lambda_function.py
+  aws lambda update-function-code --function-name cloudrpg-wake --zip-file fileb://fn.zip --region us-east-1
+  ```
+- Lab 重新開啟後：EC2 會自動開機，`cloudrpg-deploy.timer` 開機 3 分鐘後會自動部署 `main` 上最新、CI 通過的版本，不需要手動上傳。
 
 ---
 

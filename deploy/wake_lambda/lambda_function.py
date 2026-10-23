@@ -4,6 +4,8 @@
   - EC2 已經在跑且遊戲健康 → 直接 302 轉址到遊戲
   - EC2 是關機狀態 → 呼叫 StartInstances 開機，顯示「伺服器啟動中」頁面，
     每 3 秒查一次狀態，遊戲 /health 正常後自動跳轉
+  - AWS Learner Lab 沒有開（lab 結束後所有 API 都會被 voc-cancel-cred 政策拒絕）→
+    開不了機，顯示「伺服器休眠中」說明頁（Learner Lab 只能由管理員登入 AWS Academy 按 Start Lab）
 
 環境變數：
   INSTANCE_ID  例：i-020728b7077e9d8cf
@@ -14,6 +16,7 @@ import os
 import urllib.request
 
 import boto3
+from botocore.exceptions import BotoCoreError, ClientError
 
 INSTANCE_ID = os.environ["INSTANCE_ID"]
 GAME_URL = os.environ["GAME_URL"].rstrip("/")
@@ -52,7 +55,15 @@ def _target(qs) -> str:
 
 def lambda_handler(event, context):
     qs = event.get("queryStringParameters") or {}
-    state, just_started = _ensure_started()
+    # 遊戲正常就直接進去，不需要呼叫 AWS API（lab 關閉時 API 會被拒絕）
+    if not qs.get("status") and _healthy():
+        return {"statusCode": 302, "headers": {"location": _target(qs), "cache-control": "no-store"}, "body": ""}
+    try:
+        state, just_started = _ensure_started()
+    except (ClientError, BotoCoreError):
+        state, just_started = "lab_off", False
+    if state == "lab_off" and not qs.get("status"):
+        return {"statusCode": 503, "headers": {"content-type": "text/html; charset=utf-8", "cache-control": "no-store"}, "body": SLEEP_PAGE}
     ready = state == "running" and _healthy()
 
     if qs.get("status"):
@@ -89,14 +100,14 @@ PAGE = """<!doctype html>
   .hint{margin-top:16px;color:#7be0a8;font-size:12px;line-height:1.6}
   a{color:#00e5ff}
 </style></head><body><div class="box">
-<h1>☁ CLOUD RPG</h1><div class="sub">BOOTING SHARD … 伺服器喚醒中，大約需要 1～2 分鐘</div>
+<h1>CLOUD RPG</h1><div class="sub">BOOTING SHARD … 伺服器喚醒中，大約需要 1～2 分鐘</div>
 <div class="row"><span>① EC2 雲端主機</span><span id="s1" class="wait">檢查中…</span></div>
 <div class="row"><span>② 遊戲服務 (Nginx / API / 前端)</span><span id="s2" class="wait">等待中…</span></div>
 <div class="bar"><i></i></div>
 <div class="hint" id="hint">主機啟動後會自動帶你進入遊戲，請不要關閉這個頁面。</div>
 </div><script>
 const TO = __TO__;
-const label = {pending:"開機中…", running:"已開機 ✓", stopping:"正在關機，稍後重新開機…", stopped:"開機指令已送出…"};
+const label = {pending:"開機中…", running:"已開機", stopping:"正在關機，稍後重新開機…", stopped:"開機指令已送出…", lab_off:"休眠中（Learner Lab 未開啟）"};
 let tries = 0;
 async function poll(){
   tries++;
@@ -105,11 +116,33 @@ async function poll(){
     const d = await r.json();
     const s1 = document.getElementById("s1"), s2 = document.getElementById("s2");
     s1.textContent = label[d.state] || d.state; s1.className = d.state === "running" ? "ok" : "wait";
-    s2.textContent = d.ready ? "就緒 ✓" : (d.state === "running" ? "啟動中…" : "等待中…"); s2.className = d.ready ? "ok" : "wait";
+    s2.textContent = d.ready ? "就緒" : (d.state === "running" ? "啟動中…" : "等待中…"); s2.className = d.ready ? "ok" : "wait";
     if (d.ready){ document.getElementById("hint").textContent = "完成！正在進入遊戲…"; location.href = d.url; return; }
+    if (d.state === "lab_off"){ location.reload(); return; }
   }catch(e){}
   if (tries > 100){ document.getElementById("hint").innerHTML = "啟動時間比預期久，請稍後重新整理。"; return; }
   setTimeout(poll, 3000);
 }
 poll();
 </script></body></html>"""
+
+
+SLEEP_PAGE = """<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cloud RPG — 伺服器休眠中</title>
+<style>
+  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#050c09;color:#00ff88;
+       font-family:ui-monospace,Menlo,Consolas,monospace}
+  .box{width:min(560px,92vw);border:1px solid #3a2f0a;background:#071510;padding:28px 26px;box-shadow:0 0 40px -10px #ffd60a}
+  h1{margin:0 0 6px;font-size:22px;letter-spacing:.2em;color:#ffd60a}
+  p{color:#cfeedd;font-size:14px;line-height:1.8}
+  .sub{color:#3a8c5e;font-size:12px}
+  button{margin-top:10px;background:none;border:1px solid #0f3a26;color:#00e5ff;padding:6px 14px;font:inherit;cursor:pointer}
+</style></head><body><div class="box">
+<h1>CLOUD RPG</h1>
+<p>遊戲伺服器目前<b>休眠中</b>。</p>
+<p>這個遊戲架在 AWS Academy Learner Lab 上，lab 關閉時雲端主機會被停止，也無法從外部自動開機。
+請通知管理員到 AWS Academy 按下 <b>Start Lab</b>，開好之後重新整理這個頁面就會自動帶你進入遊戲。</p>
+<div class="sub">每 30 秒自動重新檢查一次</div>
+<button onclick="location.reload()">[ 重新檢查 ]</button>
+</div><script>setTimeout(() => location.reload(), 30000);</script></body></html>"""

@@ -34,6 +34,9 @@
 | 💬 聊天室 | 世界頻道 + 公會頻道，WebSocket 即時推播 |
 | 🎒 隨機裝備 | 護甲 / 飾品，5 種稀有度（普通 → 神話）與隨機詞綴，可分解 |
 | 🥊 自由對戰 `/arena` | 8 名角色、4 個場地、4 段 AI 難度；單人對電腦或雙人同鍵盤對戰 |
+| 🌐 線上即時對戰 `/arena` | 快速配對或用 4 碼房號找朋友，兩台電腦即時對打（友誼賽，記錄戰績） |
+| 📱 手機操作 | 觸控裝置自動顯示虛擬搖桿與招式按鍵（故事戰鬥、自由對戰、線上對戰都能用） |
+| 🔊 音效與音樂 | 全部用 Web Audio 即時合成：每種招式、命中、Boss 機關都有音效，每個場景與 Boss 各有背景音樂；右上角 SOUND 開關 |
 | 🎨 格鬥畫面 | 每個職業 / Boss 專屬外型與武器、招式特效、奧義 Cut-in、動態關卡背景；高 DPI 與自動降畫質 |
 | 👹 Boss 專屬機制 | 冥盡洞主：冰刺 + 黑水陷阱；天光島嶼之主：預警落雷；Administrator：半血「系統超頻」、全畫面雷射、數據方塊轟炸 |
 | 🛒 黑市 `/market` | 技能書、不死圖騰、轉職聖典；武器可升階 +1～+3，格鬥中武器外觀會跟著進化；故事模式內可開「快速黑市」 |
@@ -94,6 +97,8 @@
 | 公會 | `GET /api/guilds`、`GET /api/guilds/mine`、`POST /api/guilds`、`POST /api/guilds/{id}/join`、`POST /api/guilds/leave`、`POST /api/guilds/boss/claim` |
 | PvP / 排行 | `GET /api/pvp/opponents`、`GET /api/leaderboard/{level,tower,pvp,daily,worldboss,guild}` |
 | 社群 | `GET/POST /api/chat/{world,guild}`、WebSocket `/api/ws?token=`、`POST /api/telemetry/error` |
+| 線上對戰 | WebSocket `/api/ws/duel?token=`（建立房間 / 加入 / 快速配對 / 轉送按鍵與畫面） |
+| 管理員 | `GET /api/admin/balance?days=7`（勝率、戰鬥時間、各模式金幣收入、玩家金幣分布） |
 
 ### 專案結構
 
@@ -229,6 +234,9 @@ After the story, climb the Glitch Tower, raid world bosses with the whole server
 | 💬 Chat | World and guild channels pushed live over WebSocket |
 | 🎒 Random loot | Armor and charms with 5 rarities (common → mythic) and random affixes; salvage for gold |
 | 🥊 Free battle `/arena` | 8 fighters, 4 stages, 4 AI difficulty levels; vs CPU or 2-player on one keyboard |
+| 🌐 Online versus `/arena` | Quick match or a 4-character room code; two computers fight in real time (friendly matches, results are recorded) |
+| 📱 Mobile controls | Touch devices get a virtual joystick and move buttons (story battles, free battle and online versus) |
+| 🔊 Sound & music | Synthesised live with Web Audio: every move, hit and boss mechanic has a sound, every scene and boss has its own music; SOUND toggle in the top bar |
 | 🎨 Combat visuals | Unique look and weapon for every class / boss, move effects, super-move cut-ins, animated stages; high-DPI rendering with automatic quality fallback |
 | 👹 Boss mechanics | Abyss Lord: ice spikes + black-water trap; Sky Isle Lord: telegraphed lightning strikes; Administrator: "System Overclock" at half HP, full-screen lasers, falling data blocks |
 | 🛒 Black market `/market` | Skill books, revive totems, class transfer; weapons upgrade +1 to +3 and visibly evolve in battle; a quick shop is available inside story mode |
@@ -289,6 +297,8 @@ Browser ──HTTP :80──▶ Nginx ──────┼── /api/*, /healt
 | Guilds | `GET /api/guilds`, `GET /api/guilds/mine`, `POST /api/guilds`, `POST /api/guilds/{id}/join`, `POST /api/guilds/leave`, `POST /api/guilds/boss/claim` |
 | PvP / rankings | `GET /api/pvp/opponents`, `GET /api/leaderboard/{level,tower,pvp,daily,worldboss,guild}` |
 | Social | `GET/POST /api/chat/{world,guild}`, WebSocket `/api/ws?token=`, `POST /api/telemetry/error` |
+| Online versus | WebSocket `/api/ws/duel?token=` (create room / join / quick match / relay inputs and game state) |
+| Admin | `GET /api/admin/balance?days=7` (win rates, fight length, gold income per mode, player gold distribution) |
 
 ### Project layout
 
