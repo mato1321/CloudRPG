@@ -33,3 +33,8 @@ dist-ssr
 venv
 # 本機 SQLite 開發 / 測試資料庫
 *.db
+
+# 環境變數檔（含密碼與金鑰）不進 git，只保留 .env.example
+.env
+.env.*
+!.env.example

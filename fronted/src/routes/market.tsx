@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Shell, Panel, Stat, readAuth } from "../components/crpg/Shell";
+import { Shell, Panel, Stat } from "../components/crpg/Shell";
 import { CLASS_META, RARITY, CLASS_TRANSFER_PRICE, INFINITE_GOLD, buildShop, itemStatus } from "../lib/shop";
 import { api } from "../lib/api";
 import { GearPanel } from "../components/crpg/GearPanel";
@@ -16,27 +16,24 @@ export const Route = createFileRoute("/market")({
   }),
 });
 
-function isAdminAccount(nameOrUser?: string | null) {
-  const a = readAuth();
-  const u = (nameOrUser || a?.user || "").toString().trim().toLowerCase();
-  return u === "admin";
-}
-
 // 黑市交易全部由伺服器計算（/api/shop/buy、/api/shop/transfer），改 localStorage 也買不到東西
 function Market() {
   const [state, setState] = useState<any>(null);
+  const [isAdmin, setIsAdmin] = useState(false); // 由後端 ADMIN_USERNAMES 決定
   const [loaded, setLoaded] = useState(false);
   const [toast, setToast] = useState<any>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     api("/api/profile")
-      .then((d) => setState(d.profile))
+      .then((d) => {
+        setState(d.profile);
+        setIsAdmin(!!d.isAdmin);
+      })
       .catch((e) => setToast({ ok: false, msg: e.message }))
       .finally(() => setLoaded(true));
   }, []);
 
-  const isAdmin = isAdminAccount();
   const gold = isAdmin ? INFINITE_GOLD : (state?.gold ?? 0);
   const klass = state?.klass;
   const hasSave = !!state;

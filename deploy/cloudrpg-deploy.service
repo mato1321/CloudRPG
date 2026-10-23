@@ -1,0 +1,11 @@
+[Unit]
+Description=CloudRPG auto deploy (git pull from GitHub main when CI passes)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/CloudRPG
+ExecStart=/bin/bash /home/ubuntu/CloudRPG/deploy/auto_deploy.sh
+TimeoutStartSec=15min

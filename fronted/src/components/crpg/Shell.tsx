@@ -91,7 +91,8 @@ export function TopBar({ extra = null }) {
           </Link>
         ))}
       </nav>
-      <div className="ml-auto flex items-center gap-4">
+      <div className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1">
+        {extra}
         <Stat label="PING" value={`${ping}ms`} color={ping < 40 ? "text-[#00ff88] crpg-glow" : "text-[#ffd60a] crpg-glow-yellow"} />
         <Stat label="TIME" value={time} />
         {auth ? (

@@ -59,11 +59,7 @@ function Login() {
         const rawSave = localStorage.getItem("cloud-rpg-save");
         if (rawSave) {
           const parsed = JSON.parse(rawSave);
-          if (data.user.username.toLowerCase() === "admin" && parsed?.state) {
-            parsed.state.name = data.user.username;
-            parsed.state.gold = 999999999;
-            localStorage.setItem("cloud-rpg-save", JSON.stringify(parsed));
-          } else if (parsed?.state?.name && parsed.state.name !== data.user.username && parsed.state.name !== "WANDERER_77") {
+          if (parsed?.state?.name && parsed.state.name !== data.user.username && parsed.state.name !== "WANDERER_77") {
             localStorage.removeItem("cloud-rpg-save");
           }
         }

@@ -57,10 +57,9 @@ const ENEMIES = {
 };
 
 const INFINITE_GOLD = 999999999;
-function isAdminAccount(nameOrUser?: string | null) {
-  const a = readAuth();
-  const u = (nameOrUser || a?.user || "").toString().trim().toLowerCase();
-  return u === "admin";
+// 管理員由後端 ADMIN_USERNAMES 決定：伺服器會把管理員的金幣回傳成 INFINITE_GOLD
+function isAdminState(s) {
+  return (s?.gold ?? 0) >= INFINITE_GOLD;
 }
 
 const STONE_LABEL = { stone_red: "傳說之石・赤", stone_blue: "傳說之石・蒼", stone_gold: "傳說之石・金" };
@@ -316,7 +315,7 @@ function initialStateFor(klass) {
     klass, klassName: c.name,
     hp: c.stats.hp, hpMax: c.stats.hpMax,
     mp: c.stats.mp, mpMax: c.stats.mpMax,
-    exp: 0, expMax: 200, level: 1, gold: isAdminAccount() ? INFINITE_GOLD : 50,
+    exp: 0, expMax: 200, level: 1, gold: 50,
     atk: c.stats.atk,
     inv: { herb: 2, mana: 1 },
     flags: {},
@@ -1051,7 +1050,7 @@ function PlayPage() {
       {showShopModal && (
         <ShopModal
           state={state}
-          isAdmin={isAdminAccount(state.name)}
+          isAdmin={isAdminState(state)}
           online={online}
           initialTab={shopTab}
           onClose={() => setShowShopModal(false)}
