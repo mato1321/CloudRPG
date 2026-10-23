@@ -23,11 +23,12 @@
 
 | 功能 | 說明 |
 |---|---|
-| 📜 故事模式 `/play` | 19 個場景、7 位敵人，文字指令推進劇情，遇敵時切換成 2D 街機格鬥；第一場戰鬥有 5 步操作教學 |
+| 📜 故事模式 `/play` | 序章～終章加第五章「宮廷的真相」、9 位敵人、**4 種結局**（輸入 `endings` 查看收集進度）；文字指令推進劇情，遇敵時切換成 2D 街機格鬥 |
 | 👤 訪客模式 | 免註冊直接玩第一章，打倒第一個 Boss 後可以綁定帳號保存進度 |
 | 🗼 故障之塔 `/tower` | 每層隨機敵人與詞綴（狂暴、分身、雷暴、迷霧…），血量跨層延續，每層選一個祝福，每 5 層 Boss |
 | 📅 每日挑戰 `/daily` | 全服同一個關卡，台灣時間 0 點更新，比分數排名；每天首次通關送金幣和裝備 |
 | 🐉 世界 Boss `/raid` | 全伺服器共用一條血條，每場 45 秒，即時戰報；倒下後所有參與者都能領獎 |
+| 🤝 組隊討伐 `/raid` →「組隊討伐」 | 2–4 人在同一個畫面即時一起打世界 Boss，傷害計入全服血條、各自領獎 |
 | 🛡 公會 `/guild` | 建立 / 加入公會、每週公會 Boss、公會聊天、公會週排行 |
 | ⚔ 非同步 PvP `/pvp` | 挑戰其他玩家角色的 AI 分身，Elo 積分排名 |
 | 🏆 排行榜 `/ranking` | 等級、故障之塔、PvP、今日挑戰、世界 Boss、公會 |
@@ -67,6 +68,7 @@
 | `shop` | 開啟快速黑市（戰鬥中會暫停） |
 | `gear` | 開啟裝備背包 |
 | `skip` | 跳過目前的劇情文字 |
+| `endings` | 查看結局收集進度與提示 |
 | `save` · `load` · `clear` · `restart` | 存檔 / 讀檔 / 清除畫面 / 重新開始 |
 | `attack [N]` · `skill [N]` · `ult` · `item` · `flee` | 文字戰鬥指令（N = 招式編號） |
 
@@ -223,11 +225,12 @@ After the story, climb the Glitch Tower, raid world bosses with the whole server
 
 | Feature | Description |
 |---|---|
-| 📜 Story mode `/play` | 19 scenes and 7 enemies; type commands to advance the story, encounters switch to 2D arcade fights; a 5-step tutorial in the first fight |
+| 📜 Story mode `/play` | Prologue to finale plus Chapter 5, 9 enemies and **4 endings** (type `endings` to see your collection); type commands to advance the story, encounters switch to 2D arcade fights |
 | 👤 Guest mode | Play chapter 1 without signing up, then bind an account to keep your progress |
 | 🗼 Glitch Tower `/tower` | Random enemies and modifiers on every floor (berserk, clones, thunderstorm, fog…), HP carries over, pick a blessing after each floor, a boss every 5 floors |
 | 📅 Daily challenge `/daily` | The whole server plays the same stage, reset at midnight Taiwan time, ranked by score; first clear of the day gives gold and gear |
 | 🐉 World boss `/raid` | One shared HP bar for the entire server, 45-second fights, live battle feed; every participant gets rewards when it falls |
+| 🤝 Co-op raid `/raid` → "組隊討伐" | 2–4 players fight the world boss together on one screen; damage counts toward the shared HP and everyone claims their own rewards |
 | 🛡 Guilds `/guild` | Create / join guilds, weekly guild boss, guild chat, weekly guild ranking |
 | ⚔ Async PvP `/pvp` | Fight AI-controlled copies of other players' characters, Elo rating |
 | 🏆 Leaderboards `/ranking` | Level, Glitch Tower, PvP, today's challenge, world boss, guilds |
@@ -267,6 +270,7 @@ After the story, climb the Glitch Tower, raid world bosses with the whole server
 | `shop` | Open the quick shop (pauses an ongoing fight) |
 | `gear` | Open the gear bag |
 | `skip` | Skip the current story text |
+| `endings` | Show which endings you have unlocked, with hints |
 | `save` · `load` · `clear` · `restart` | Save / load / clear the screen / start over |
 | `attack [N]` · `skill [N]` · `ult` · `item` · `flee` | Text battle commands (N = move number) |
 
