@@ -62,13 +62,13 @@ function Lobby() {
                 ▶ 立即開玩（免註冊）
               </Link>
               <Link to="/raid" className="crpg-panel px-5 py-2 text-[#ff4d6d] crpg-glow-red border-[#ff4d6d]/60 font-bold">
-                🐉 世界 BOSS
+                世界 BOSS
               </Link>
               <Link to="/tower" className="crpg-panel px-5 py-2 text-[#c084fc] border-[#c084fc]/60">
-                🗼 故障之塔
+                故障之塔
               </Link>
               <Link to="/arena" className="crpg-panel px-5 py-2 text-[#ffd60a] crpg-glow-yellow">
-                🥊 自由對戰
+                自由對戰
               </Link>
             </div>
           </section>

@@ -58,8 +58,8 @@ export function ShopModal({ state, isAdmin, online, initialTab = "shop", onClose
         <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2 border-b border-[#0f3a26]">
           <div className="flex items-center gap-2">
             {[
-              ["shop", "🛒 黑市"],
-              ["gear", "🎒 裝備背包"],
+              ["shop", "黑市"],
+              ["gear", "裝備背包"],
             ].map(([k, l]) => (
               <button
                 key={k}
@@ -94,7 +94,7 @@ export function ShopModal({ state, isAdmin, online, initialTab = "shop", onClose
               金幣、物品與裝備都由雲端伺服器保管（防止修改存檔作弊），所以訪客還不能交易。綁定帳號後，目前的訪客進度會一起保存。
             </p>
             <button onClick={onNeedBind} className="crpg-panel px-5 py-2 text-[#00ff88] crpg-glow">
-              [ 💾 綁定帳號 ]
+              [ 綁定帳號 ]
             </button>
           </div>
         ) : (

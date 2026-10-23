@@ -125,7 +125,7 @@ function TowerPage() {
                 </div>
                 <div className="flex gap-2">
                   <button onClick={() => setFighting(true)} className="crpg-panel px-6 py-2 text-[#00ff88] crpg-glow border-[#00ff88]/60 font-bold">
-                    [ ⚔ 挑戰第 {run.floor} 層 ]
+                    [ 挑戰第 {run.floor} 層 ]
                   </button>
                   <button onClick={() => confirm("確定放棄這次攀登？") && act("/api/tower/abandon")} className="crpg-panel px-4 py-2 text-[#ff4d6d] text-xs">
                     [ 放棄 ]

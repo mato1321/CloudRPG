@@ -1086,7 +1086,7 @@ function PlayPage() {
               )}
               {!online && (
                 <button onClick={() => setBindPrompt("想把進度存到雲端嗎？")} className="px-2 py-0.5 border border-[#00ff88]/50 text-[#00ff88] normal-case tracking-normal">
-                  訪客模式 · 💾 綁定帳號
+                  訪客模式 · 綁定帳號
                 </button>
               )}
               <span className="text-[#3a8c5e]">[●REC]</span>
@@ -1232,7 +1232,7 @@ function PlayPage() {
             <div className="mt-3">
               <div className="text-[10px] tracking-widest text-[#3a8c5e] mb-1 border-b border-[#0f3a26] pb-1 flex justify-between">
                 <span>▌ SKILLS (格鬥技能)</span>
-                <Link to="/market" className="text-[#ffd60a] hover:underline">🛒 買技能書/轉職</Link>
+                <Link to="/market" className="text-[#ffd60a] hover:underline">買技能書/轉職</Link>
               </div>
               <ul className="space-y-0.5 text-[11px]">
                 <li className="flex justify-between">
@@ -1291,8 +1291,8 @@ function PlayPage() {
 
             <div className="mt-3 flex gap-1">
               <button onClick={saveGame} className="flex-1 px-2 py-1 border border-[#0f3a26] text-[#00ff88] hover:border-[#00ff88] hover:crpg-glow text-[11px]">[ SAVE ]</button>
-              <button onClick={() => openShop("shop")} className="flex-1 px-2 py-1 border border-[#3a2f0a] text-[#ffd60a] hover:border-[#ffd60a] hover:crpg-glow-yellow text-[11px]">[ 🛒 黑市 ]</button>
-              <button onClick={() => openShop("gear")} className="flex-1 px-2 py-1 border border-[#1f1a4a] text-[#c084fc] hover:border-[#c084fc] text-[11px]">[ 🎒 裝備 ]</button>
+              <button onClick={() => openShop("shop")} className="flex-1 px-2 py-1 border border-[#3a2f0a] text-[#ffd60a] hover:border-[#ffd60a] hover:crpg-glow-yellow text-[11px]">[ 黑市 ]</button>
+              <button onClick={() => openShop("gear")} className="flex-1 px-2 py-1 border border-[#1f1a4a] text-[#c084fc] hover:border-[#c084fc] text-[11px]">[ 裝備 ]</button>
               <button onClick={loadGame} className="flex-1 px-2 py-1 border border-[#0f3a26] text-[#00e5ff] hover:border-[#00e5ff] hover:crpg-glow-cyan text-[11px]">[ LOAD ]</button>
             </div>
           </div>

@@ -1226,7 +1226,7 @@ function ArenaPage() {
                   : "border-[#0f3a26] text-[#3a8c5e]"
               }`}
             >
-              [ 👥 1P vs 2P 雙人同鍵盤自由對打 (左右分區) ]
+              [ 1P vs 2P 雙人同鍵盤自由對打 (左右分區) ]
             </button>
             <button
               onClick={() => setMode("cpu")}
@@ -1236,7 +1236,7 @@ function ArenaPage() {
                   : "border-[#0f3a26] text-[#3a8c5e]"
               }`}
             >
-              [ 🤖 1P vs CPU 單人自由對戰電腦 ]
+              [ 1P vs CPU 單人自由對戰電腦 ]
             </button>
           </div>
 
@@ -1264,7 +1264,7 @@ function ArenaPage() {
               onClick={toggleMute}
               className="px-2.5 py-1 border border-[#0f3a26] text-[#cfeedd] hover:border-[#00ff88]"
             >
-              {muted ? "🔇 音效：關" : "🔊 音效：開"}
+              {muted ? "音效：關" : "音效：開"}
             </button>
             <button
               onClick={() => startNewMatch(mode, p1Pick, p2Pick, stageIdx, aiDiffId)}

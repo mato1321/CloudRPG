@@ -75,7 +75,7 @@ function DailyPage() {
                   <NeedCharacter />
                 ) : (
                   <button onClick={() => setFighting(true)} className="crpg-panel px-6 py-2 text-[#ffd60a] crpg-glow-yellow border-[#ffd60a]/60 font-bold">
-                    [ ⚔ 挑戰今日關卡 ]
+                    [ 挑戰今日關卡 ]
                   </button>
                 )}
               </div>

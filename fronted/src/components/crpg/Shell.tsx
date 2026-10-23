@@ -5,14 +5,14 @@ import { useLocation, useNavigate, Link } from "@tanstack/react-router";
 const NAV = [
   { to: "/",          label: "LOBBY"  },
   { to: "/play",      label: "PLAY"   },
-  { to: "/tower",     label: "🗼 TOWER" },
-  { to: "/daily",     label: "📅 DAILY" },
-  { to: "/raid",      label: "🐉 RAID" },
-  { to: "/pvp",       label: "⚔ PVP" },
-  { to: "/arena",     label: "🥊 ARENA" },
+  { to: "/tower",     label: "TOWER" },
+  { to: "/daily",     label: "DAILY" },
+  { to: "/raid",      label: "RAID" },
+  { to: "/pvp",       label: "PVP" },
+  { to: "/arena",     label: "ARENA" },
   { to: "/guild",     label: "GUILD"  },
   { to: "/market",    label: "MARKET" },
-  { to: "/ranking",   label: "🏆 RANK" },
+  { to: "/ranking",   label: "RANK" },
   { to: "/codex",     label: "CODEX"  },
 ];
 

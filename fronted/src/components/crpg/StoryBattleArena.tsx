@@ -1969,7 +1969,7 @@ export function StoryBattleArena({
             }}
             className="px-2 py-0.5 border border-[#0f3a26] text-[#7be0a8] hover:border-[#00ff88] text-[11px]"
           >
-            {muted ? "🔇 音效關" : "🔊 音效開"}
+            {muted ? "音效關" : "音效開"}
           </button>
           {onOpenShopModal && (
             <button
@@ -1977,7 +1977,7 @@ export function StoryBattleArena({
               onClick={onOpenShopModal}
               className="px-2 py-0.5 border border-[#ffd60a] text-[#ffd60a] hover:bg-[#ffd60a]/10 text-[11px]"
             >
-              🛒 快速開啟黑市
+              快速開啟黑市
             </button>
           )}
           {!enemyCfg?.isFinal && (
@@ -1986,7 +1986,7 @@ export function StoryBattleArena({
               onClick={onFlee}
               className="px-2 py-0.5 border border-[#3a0f1c] text-[#ff4d6d] hover:border-[#ff4d6d] text-[11px]"
             >
-              🏃 撤退回村莊
+              撤退回村莊
             </button>
           )}
         </div>

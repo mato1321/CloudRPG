@@ -13,12 +13,12 @@ export const Route = createFileRoute("/ranking")({
 });
 
 const BOARDS = [
-  { key: "level", label: "⭐ 等級", value: "等級", fmt: (v) => `Lv.${v}` },
-  { key: "tower", label: "🗼 故障之塔", value: "最高樓層", fmt: (v) => `${v} F` },
-  { key: "pvp", label: "⚔ PvP 積分", value: "積分", fmt: (v) => v },
-  { key: "daily", label: "📅 今日挑戰", value: "分數", fmt: (v) => v.toLocaleString() },
-  { key: "worldboss", label: "🐉 世界 Boss", value: "傷害", fmt: (v) => v.toLocaleString() },
-  { key: "guild", label: "🛡 公會（本週）", value: "公會 Boss 傷害", fmt: (v) => v.toLocaleString() },
+  { key: "level", label: "等級", value: "等級", fmt: (v) => `Lv.${v}` },
+  { key: "tower", label: "故障之塔", value: "最高樓層", fmt: (v) => `${v} F` },
+  { key: "pvp", label: "PvP 積分", value: "積分", fmt: (v) => v },
+  { key: "daily", label: "今日挑戰", value: "分數", fmt: (v) => v.toLocaleString() },
+  { key: "worldboss", label: "世界 Boss", value: "傷害", fmt: (v) => v.toLocaleString() },
+  { key: "guild", label: "公會（本週）", value: "公會 Boss 傷害", fmt: (v) => v.toLocaleString() },
 ];
 
 function RankingPage() {

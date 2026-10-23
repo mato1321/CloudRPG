@@ -107,7 +107,7 @@ function GuildPage() {
                       <span className="text-[#00ff88]">✓ 本週已討伐成功！</span>
                     ) : (
                       <button onClick={() => setFighting(true)} className="crpg-panel px-5 py-2 text-[#ff4d6d] crpg-glow-red border-[#ff4d6d]/60 font-bold">
-                        [ ⚔ 出戰（45 秒） ]
+                        [ 出戰（45 秒） ]
                       </button>
                     )}
                     {mine.unclaimed > 0 && (
@@ -115,7 +115,7 @@ function GuildPage() {
                         onClick={() => act("/api/guilds/boss/claim", {}, (r) => `領取成功：+${r.gold}G、${r.gear.map((g) => g.name).join("、")}`)}
                         className="crpg-panel px-4 py-2 text-[#ffd60a] crpg-glow-yellow border-[#ffd60a]/60 animate-pulse"
                       >
-                        [ 🎁 領取公會獎勵 ]
+                        [ 領取公會獎勵 ]
                       </button>
                     )}
                   </div>

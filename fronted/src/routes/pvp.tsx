@@ -86,7 +86,7 @@ function PvpPage() {
                       {c?.icon} {c?.name} · Lv.{o.level} · ATK {o.atk} · HP {o.hpMax}
                     </div>
                     <button onClick={() => setTarget(o)} className="mt-1 px-3 py-1 border border-[#00e5ff] text-[#00e5ff] text-xs hover:crpg-glow-cyan">
-                      [ ⚔ 挑戰 ]
+                      [ 挑戰 ]
                     </button>
                   </div>
                 );

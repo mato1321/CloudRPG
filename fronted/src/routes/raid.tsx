@@ -92,13 +92,13 @@ function RaidPage() {
               <NeedCharacter />
             ) : (
               <button onClick={() => setFighting(true)} className="crpg-panel px-6 py-2 text-[#ff4d6d] crpg-glow-red border-[#ff4d6d]/60 font-bold">
-                [ ⚔ 參戰（45 秒） ]
+                [ 參戰（45 秒） ]
               </button>
             )}
             {boss?.mine && <span className="text-[12px] text-[#cfeedd]">你的累積傷害：<span className="text-[#ffd60a]">{boss.mine.damage.toLocaleString()}</span>（{boss.mine.hits} 場）</span>}
             {boss?.unclaimed > 0 && (
               <button onClick={doClaim} className="crpg-panel px-4 py-2 text-[#ffd60a] crpg-glow-yellow border-[#ffd60a]/60 font-bold animate-pulse">
-                [ 🎁 領取 {boss.unclaimed} 份討伐獎勵 ]
+                [ 領取 {boss.unclaimed} 份討伐獎勵 ]
               </button>
             )}
           </div>
