@@ -1,5 +1,8 @@
-"""世界聊天 / 公會聊天（REST 讀寫 + WebSocket 即時推播）與前端錯誤回報。"""
+"""世界聊天 / 公會聊天（REST 讀寫 + WebSocket 即時推播）、線上即時對戰轉送、前端錯誤回報。"""
+import asyncio
+import json
 import logging
+import time
 import re
 from typing import Literal, Optional
 
@@ -9,10 +12,11 @@ from sqlalchemy.orm import Session
 
 from app.core.deps import _user_from_header, get_current_user, get_optional_user
 from app.core.monitoring import capture_client_error
+from app.duel import Player, duels, safe_send, start_payload
 from app.core.ratelimit import client_ip, enforce, limiter
 from app.db.database import SessionLocal, get_db
 from app.game import services as S
-from app.models.game import ChatMessage
+from app.models.game import ChatMessage, PvpMatch
 from app.models.user import User
 from app.realtime import hub
 
@@ -79,10 +83,15 @@ def chat_send(channel: str, req: ChatReq, user: User = Depends(get_current_user)
     return payload["message"]
 
 
+def _ws_ip(ws: WebSocket) -> str:
+    """Nginx 後面所有連線的 client.host 都是 127.0.0.1，要用 Nginx 帶進來的 X-Real-IP"""
+    return ws.headers.get("x-real-ip") or (ws.client.host if ws.client else "?")
+
+
 @router.websocket("/api/ws")
 async def ws_endpoint(ws: WebSocket, token: Optional[str] = None):
     """訂閱世界頻道（以及自己的公會頻道）：聊天、Boss 血量即時更新"""
-    ip = ws.client.host if ws.client else "?"
+    ip = _ws_ip(ws)
     if not limiter.hit(f"ws:{ip}", 20, 60):
         await ws.close(code=1008)
         return
@@ -110,6 +119,94 @@ async def ws_endpoint(ws: WebSocket, token: Optional[str] = None):
         pass
     finally:
         hub.disconnect(ws)
+
+
+def _record_duel(host_id, guest_id, host_won: bool):
+    db = SessionLocal()
+    try:
+        db.add(PvpMatch(attacker_id=host_id, defender_ref=f"duel:{guest_id}", win=host_won, delta=0))
+        db.commit()
+    finally:
+        db.close()
+
+
+@router.websocket("/api/ws/duel")
+async def duel_ws(ws: WebSocket, token: Optional[str] = None):
+    """線上即時對戰（路徑放在 /api/ws 底下，沿用 Nginx 的 WebSocket 設定）。協定見 app/duel.py"""
+    if not limiter.hit(f"duel-ws:{_ws_ip(ws)}", 20, 60):
+        await ws.close(code=1008)
+        return
+    await ws.accept()
+    db = SessionLocal()
+    try:
+        user = _user_from_header(f"Bearer {token}", db) if token else None
+    finally:
+        db.close()
+    if not user:
+        await ws.send_json({"t": "error", "msg": "請先登入才能線上對戰"})
+        await ws.close(code=4401)
+        return
+    me = Player(ws=ws, user_id=user.id, name=user.username)
+    window, count = time.monotonic(), 0
+    try:
+        while True:
+            raw = await ws.receive_text()
+            now = time.monotonic()
+            if now - window > 1:
+                window, count = now, 0
+            count += 1
+            if count > 90 or len(raw) > 20000:  # 每秒最多 90 則（30 次畫面 + 按鍵），超過的丟掉
+                continue
+            room = me.room
+            # 熱路徑：畫面狀態直接原文轉送，不重新解析
+            if raw.startswith('{"t":"st"'):
+                if room and room.host is me and room.guest:
+                    try:
+                        await room.guest.ws.send_text(raw)
+                    except Exception:
+                        pass
+                continue
+            if raw == "ping":
+                await ws.send_json({"t": "pong"})
+                continue
+            try:
+                msg = json.loads(raw)
+            except ValueError:
+                continue
+            t = msg.get("t")
+            if t == "in" and room and room.guest is me:
+                await safe_send(room.host, {"t": "in", "c": str(msg.get("c", ""))[:16], "d": 1 if msg.get("d") else 0})
+            elif t in ("create", "join", "queue"):
+                me.fighter = duels.clean_fighter(msg.get("fighter"))
+                if t == "create":
+                    room = await duels.create(me, msg.get("stage"))
+                    await ws.send_json({"t": "created", "code": room.code})
+                    continue
+                room = await (duels.join(me, msg.get("code")) if t == "join" else duels.quick(me, msg.get("stage")))
+                if not room:
+                    await ws.send_json({"t": "error", "msg": "找不到這個房間，或房間已經滿了"} if t == "join" else {"t": "waiting"})
+                    continue
+                room.started = True
+                await safe_send(room.host, start_payload(room, "host"))
+                await safe_send(room.guest, start_payload(room, "guest"))
+            elif t == "cancel":
+                await duels.leave(me)
+                await ws.send_json({"t": "idle"})
+            elif t == "end" and room and room.host is me and room.guest and not room.reported:
+                room.reported = True
+                room.matches += 1
+                winner = "host" if msg.get("winner") == "host" else "guest"
+                await asyncio.to_thread(_record_duel, room.host.user_id, room.guest.user_id, winner == "host")
+                await safe_send(room.guest, {"t": "end", "winner": winner})
+            elif t == "rematch" and room and room.host is me and room.guest:
+                room.reported = False
+                await safe_send(room.guest, {"t": "rematch"})
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
+    finally:
+        await duels.leave(me)
 
 
 class ClientError(BaseModel):

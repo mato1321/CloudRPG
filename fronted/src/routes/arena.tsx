@@ -3,6 +3,27 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { Shell, Panel } from "../components/crpg/Shell";
 import * as FX from "../components/crpg/battleFx";
+import { TouchControls, ARENA_BUTTONS } from "../components/crpg/TouchControls";
+import { audio } from "../lib/audio";
+import { useAudioSettings, useTheme } from "../lib/useAudio";
+import { DuelPanel } from "../components/crpg/DuelPanel";
+
+/* 線上對戰：對手送過來的按鍵（用自己的 WASD + FGRTYQ / JKLUOI）在房主這邊操作 2P */
+const REMOTE_ATTACK: Record<string, string> = {
+  KeyF: "light", KeyJ: "light", KeyG: "heavy", KeyK: "heavy", KeyR: "hadouken", KeyL: "hadouken",
+  KeyT: "shoryuken", KeyU: "shoryuken", KeyY: "dash", KeyO: "dash", KeyQ: "super", KeyI: "super",
+};
+const NET_KEYS = new Set([...Object.keys(REMOTE_ATTACK), "KeyA", "KeyD", "KeyW", "KeyS"]);
+
+/** 送給對手的精簡狀態：只留數值 / 字串欄位（cfg 雙方各自用角色 id 建立，粒子特效對手自己產生） */
+function netFields(o: any) {
+  const out: any = {};
+  for (const k in o) {
+    const v = o[k];
+    if (k !== "cfg" && k[0] !== "_" && (v === null || typeof v !== "object")) out[k] = v;
+  }
+  return out;
+}
 
 export const Route = createFileRoute("/arena")({
   component: ArenaPage,
@@ -169,111 +190,13 @@ const AI_DIFFICULTIES = [
   { id: "master", label: "STAGE 4 · MASTER (魔王級)", aggr: 0.84, block: 0.58, hpMul: 1.38, atkScale: 1.30 },
 ];
 
-/* ───────────── WEB AUDIO ARCADE SYNTH ───────────── */
+/* ───────────── 音效：轉給共用音訊引擎（lib/audio.ts） ───────────── */
+
+const ARENA_SFX: Record<string, string> = { hadouken: "proj", shoryuken: "rising", super: "ult" };
 
 class ArcadeAudio {
-  ctx: AudioContext | null = null;
-  muted = false;
-
-  init() {
-    if (typeof window === "undefined") return;
-    if (!this.ctx) {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (AudioCtx) this.ctx = new AudioCtx();
-    }
-    if (this.ctx && this.ctx.state === "suspended") {
-      this.ctx.resume().catch(() => {});
-    }
-  }
-
-  play(type: "light" | "heavy" | "block" | "hadouken" | "shoryuken" | "dash" | "super" | "ko" | "jump") {
-    if (this.muted) return;
-    try {
-      this.init();
-      if (!this.ctx) return;
-      const now = this.ctx.currentTime;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-
-      if (type === "light") {
-        osc.type = "triangle";
-        osc.frequency.setValueAtTime(220, now);
-        osc.frequency.exponentialRampToValueAtTime(60, now + 0.08);
-        gain.gain.setValueAtTime(0.25, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
-        osc.start(now);
-        osc.stop(now + 0.08);
-      } else if (type === "heavy") {
-        osc.type = "sawtooth";
-        osc.frequency.setValueAtTime(160, now);
-        osc.frequency.exponentialRampToValueAtTime(38, now + 0.16);
-        gain.gain.setValueAtTime(0.35, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.16);
-        osc.start(now);
-        osc.stop(now + 0.16);
-      } else if (type === "block") {
-        osc.type = "square";
-        osc.frequency.setValueAtTime(880, now);
-        osc.frequency.exponentialRampToValueAtTime(420, now + 0.07);
-        gain.gain.setValueAtTime(0.18, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.07);
-        osc.start(now);
-        osc.stop(now + 0.07);
-      } else if (type === "hadouken") {
-        osc.type = "sine";
-        osc.frequency.setValueAtTime(280, now);
-        osc.frequency.exponentialRampToValueAtTime(620, now + 0.12);
-        osc.frequency.exponentialRampToValueAtTime(190, now + 0.28);
-        gain.gain.setValueAtTime(0.3, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.28);
-        osc.start(now);
-        osc.stop(now + 0.28);
-      } else if (type === "shoryuken") {
-        osc.type = "sawtooth";
-        osc.frequency.setValueAtTime(180, now);
-        osc.frequency.exponentialRampToValueAtTime(760, now + 0.25);
-        gain.gain.setValueAtTime(0.3, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
-        osc.start(now);
-        osc.stop(now + 0.25);
-      } else if (type === "dash") {
-        osc.type = "triangle";
-        osc.frequency.setValueAtTime(520, now);
-        osc.frequency.exponentialRampToValueAtTime(140, now + 0.22);
-        gain.gain.setValueAtTime(0.3, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.22);
-        osc.start(now);
-        osc.stop(now + 0.22);
-      } else if (type === "super") {
-        osc.type = "square";
-        osc.frequency.setValueAtTime(440, now);
-        osc.frequency.setValueAtTime(660, now + 0.08);
-        osc.frequency.setValueAtTime(880, now + 0.16);
-        osc.frequency.exponentialRampToValueAtTime(120, now + 0.45);
-        gain.gain.setValueAtTime(0.38, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.45);
-        osc.start(now);
-        osc.stop(now + 0.45);
-      } else if (type === "jump") {
-        osc.type = "sine";
-        osc.frequency.setValueAtTime(190, now);
-        osc.frequency.exponentialRampToValueAtTime(420, now + 0.11);
-        gain.gain.setValueAtTime(0.14, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.11);
-        osc.start(now);
-        osc.stop(now + 0.11);
-      } else if (type === "ko") {
-        osc.type = "sawtooth";
-        osc.frequency.setValueAtTime(140, now);
-        osc.frequency.exponentialRampToValueAtTime(28, now + 0.65);
-        gain.gain.setValueAtTime(0.45, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.65);
-        osc.start(now);
-        osc.stop(now + 0.65);
-      }
-    } catch {}
+  play(type: string) {
+    audio.sfx(ARENA_SFX[type] || type);
   }
 }
 
@@ -284,12 +207,34 @@ const sfx = new ArcadeAudio();
 function ArenaPage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  const [mode, setMode] = useState<"cpu" | "pvp">("pvp");
+  const [mode, setMode] = useState<"cpu" | "pvp" | "online">("pvp");
+  const [matchKey, setMatchKey] = useState(0); // 每場線上對戰開始時 +1，讓引擎重新開局
+  const netRef = useRef<any>(null); // { role: "host" | "guest", client, names }
+  const [showOnline, setShowOnline] = useState(false);
+  const online = mode === "online";
+
+  function startOnline(m: any, client: any) {
+    netRef.current = { role: m.role, client, names: { p1: m.host.name, p2: m.guest.name } };
+    setP1Pick(m.host.fighter);
+    setP2Pick(m.guest.fighter);
+    setStageIdx(m.stage || 0);
+    setMode("online");
+    setMatchKey((k) => k + 1);
+    setTimeout(() => canvasRef.current?.scrollIntoView({ block: "center", behavior: "smooth" }), 200);
+  }
+
+  function stopOnline() {
+    if (!netRef.current) return;
+    netRef.current = null;
+    setMode("pvp");
+    setMatchKey((k) => k + 1);
+  }
   const [p1Pick, setP1Pick] = useState("warrior_rpg");
   const [p2Pick, setP2Pick] = useState("ryu");
   const [aiDiffId, setAiDiffId] = useState("normal");
   const [stageIdx, setStageIdx] = useState(0);
-  const [muted, setMuted] = useState(false);
+  const { muted } = useAudioSettings();
+  useTheme("dojo_battle");
   const [matchStateText, setMatchStateText] = useState("READY — 自由選擇角色開始對戰！");
 
   const gameRef = useRef<any>(null);
@@ -361,9 +306,12 @@ function ArenaPage() {
       phaseTimer: 70,
       bannerText: "ROUND 1",
       subBannerText:
-        customMode === "pvp"
+        customMode === "online"
+          ? `線上對戰：${netRef.current?.names?.p1 || "房主"} VS ${netRef.current?.names?.p2 || "對手"}`
+          : customMode === "pvp"
           ? "雙人模式：1P 左半邊鍵盤 (WASD+FGRTYQ) vs 2P 右半邊鍵盤 (方向鍵+JKLUOI)"
           : `自由對戰 (${diffObj.label})`,
+      labels: customMode === "online" ? netRef.current?.names : null,
       winner: null,
       projectiles: [],
       particles: [],
@@ -376,7 +324,7 @@ function ArenaPage() {
       p2: createFighterEntity(f2, 700, -1, customMode === "cpu", diffObj),
     };
     setMatchStateText(
-      `[${customMode === "pvp" ? "雙人同鍵盤對戰" : "單人 VS 電腦"}] ${f1.name} VS ${f2.name}`
+      `[${customMode === "online" ? "線上即時對戰" : customMode === "pvp" ? "雙人同鍵盤對戰" : "單人 VS 電腦"}] ${f1.name} VS ${f2.name}`
     );
   }
 
@@ -405,6 +353,7 @@ function ArenaPage() {
     startNewMatch(mode, p1Pick, p2Pick, stageIdx, aiDiffId);
 
     const keys = new Set<string>();
+    const remoteKeys = new Set<string>(); // 線上對戰：房主這邊收到的對手按鍵
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", " "].includes(e.key)) {
@@ -414,6 +363,13 @@ function ArenaPage() {
       }
 
       const code = e.code;
+      const net = netRef.current;
+      if (gameRef.current?.mode === "online" && net?.role === "guest") {
+        // 線上對戰的對手：按鍵送給房主，自己不模擬
+        if (!keys.has(code) && NET_KEYS.has(code)) net.client.send({ t: "in", c: code, d: 1 });
+        keys.add(code);
+        return;
+      }
       const isFirstPress = !keys.has(code);
       keys.add(code);
 
@@ -422,6 +378,7 @@ function ArenaPage() {
 
       if (isFirstPress && (code === "Space" || code === "Enter") && g.phase === "match_over") {
         startNewMatch(g.mode, p1Pick, p2Pick, stageIdx, aiDiffId);
+        if (g.mode === "online") net?.client.send({ t: "rematch" });
         return;
       }
 
@@ -477,8 +434,30 @@ function ArenaPage() {
     };
 
     const onKeyUp = (e: KeyboardEvent) => {
+      const net = netRef.current;
+      if (gameRef.current?.mode === "online" && net?.role === "guest" && NET_KEYS.has(e.code)) {
+        net.client.send({ t: "in", c: e.code, d: 0 });
+      }
       keys.delete(e.code);
     };
+
+    if (netRef.current) {
+      // 房主：對手的按鍵 → 2P 的移動與出招
+      netRef.current.handleInput = (code: string, down: boolean) => {
+        const g = gameRef.current;
+        if (!g || g.mode !== "online") return;
+        if (!down) {
+          remoteKeys.delete(code);
+          return;
+        }
+        if (remoteKeys.has(code)) return;
+        remoteKeys.add(code);
+        const kind = REMOTE_ATTACK[code];
+        if (kind && g.phase === "fight") triggerAttack(g, g.p2, g.p1, kind === "heavy" && remoteKeys.has("KeyS") ? "sweep" : kind);
+      };
+      // 對手：套用房主傳來的畫面狀態
+      netRef.current.onSnapshot = (s: any) => applySnapshot(gameRef.current, s);
+    }
 
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
@@ -928,9 +907,15 @@ function ArenaPage() {
         dpr = FX.setupCanvas(canvas, 900, 450);
         const ctx = canvas.getContext("2d");
         if (ctx) {
+          const net = netRef.current;
+          const guest = g.mode === "online" && net?.role === "guest";
           let substeps = 0;
           while (accumulator >= STEP_MS && substeps < 3) {
-            updateGame(g);
+            if (guest) guestTick(g);
+            else {
+              updateGame(g);
+              if (g.mode === "online" && g.frameCounter % 2 === 0) sendSnapshot(g); // 每秒約 24 次
+            }
             accumulator -= STEP_MS;
             substeps++;
           }
@@ -939,6 +924,57 @@ function ArenaPage() {
         }
       }
       animId = requestAnimationFrame(step);
+    }
+
+    function sendSnapshot(g: any) {
+      netRef.current?.client.send({
+        t: "st",
+        s: {
+          phase: g.phase, bannerText: g.bannerText, subBannerText: g.subBannerText, timer: g.timer, round: g.round,
+          p1Wins: g.p1Wins, p2Wins: g.p2Wins, frameCounter: g.frameCounter, superFlash: g.superFlash,
+          p1: netFields(g.p1), p2: netFields(g.p2),
+          proj: g.projectiles.map(netFields),
+          ft: g.floatingTexts.map(netFields),
+        },
+      });
+    }
+
+    /** 對手這邊：用狀態變化重建出招特效、命中火花與音效 */
+    function applySnapshot(g: any, s: any) {
+      if (!g || !s || g.mode !== "online") return;
+      const prevPhase = g.phase;
+      for (const [f, n] of [[g.p1, s.p1], [g.p2, s.p2]] as any[]) {
+        if (!n) continue;
+        const other = f === g.p1 ? g.p2 : g.p1;
+        const started = n.state === "attack" && (f.state !== "attack" || f.attackType !== n.attackType || n.stateTimer > f.stateTimer);
+        const blocked = n.state === "block" && f.state !== "block";
+        const hpDrop = f.hp - n.hp;
+        Object.assign(f, n);
+        if (started && n.attackType) {
+          sfx.play(n.attackType);
+          FX.onAttackStart(g, f, n.attackType, { name: f.cfg.superName, side: f === g.p1 ? "left" : "right" });
+        }
+        if (blocked) {
+          sfx.play("block");
+          FX.onHit(g, other, f, { blocked: true });
+        } else if (hpDrop > 0) FX.onHit(g, other, f, { heavy: hpDrop >= 18 });
+      }
+      g.projectiles = s.proj || [];
+      g.floatingTexts = s.ft || [];
+      for (const k of ["phase", "bannerText", "subBannerText", "timer", "round", "p1Wins", "p2Wins", "frameCounter", "superFlash"]) g[k] = s[k];
+      if (s.phase === "ko" && prevPhase !== "ko") sfx.play("ko");
+    }
+
+    /** 對手這邊每個邏輯步只更新特效（戰鬥由房主模擬） */
+    function guestTick(g: any) {
+      if (g.screenShake > 0) g.screenShake = Math.max(0, g.screenShake - 0.8);
+      FX.updateParticles(g);
+      FX.updateFx(g);
+      FX.trackAfterimages(g, g.p1);
+      FX.trackAfterimages(g, g.p2);
+      FX.emitWeaponParticles(g, g.p1);
+      FX.emitWeaponParticles(g, g.p2);
+      for (const proj of g.projectiles) FX.emitProjectileTrail(g, proj);
     }
 
     function updateGame(g: any) {
@@ -986,8 +1022,9 @@ function ArenaPage() {
             const matchWinner = g.p1Wins >= 2 ? g.p1 : g.p2;
             const winSide = g.p1Wins >= 2 ? "1P" : g.mode === "cpu" ? "CPU" : "2P";
             g.winner = matchWinner;
-            g.bannerText = `${winSide} · ${matchWinner.cfg.name} WINS!`;
-            g.subBannerText = "按 [SPACE] 再戰一場，或於上方自由切換角色！";
+            g.bannerText = `${g.labels ? (g.p1Wins >= 2 ? g.labels.p1 : g.labels.p2) : winSide} · ${matchWinner.cfg.name} WINS!`;
+            g.subBannerText = g.mode === "online" ? "房主按 [SPACE] 再戰一場" : "按 [SPACE] 再戰一場，或於上方自由切換角色！";
+            if (g.mode === "online") netRef.current?.client.send({ t: "end", winner: g.p1Wins >= 2 ? "host" : "guest" });
             setMatchStateText(`勝負揭曉：${winSide} (${matchWinner.cfg.name}) 獲勝！`);
           } else {
             g.round += 1;
@@ -1029,14 +1066,15 @@ function ArenaPage() {
       if (g.mode === "cpu") {
         updateAI(g, g.p2, g.p1);
       } else {
+        const online = g.mode === "online";
         updateFighterControl(
           g,
           g.p2,
           g.p1,
-          keys.has("ArrowLeft"),
-          keys.has("ArrowRight"),
-          keys.has("ArrowUp"),
-          keys.has("ArrowDown")
+          online ? remoteKeys.has("KeyA") : keys.has("ArrowLeft"),
+          online ? remoteKeys.has("KeyD") : keys.has("ArrowRight"),
+          online ? remoteKeys.has("KeyW") : keys.has("ArrowUp"),
+          online ? remoteKeys.has("KeyS") : keys.has("ArrowDown")
         );
       }
 
@@ -1148,8 +1186,8 @@ function ArenaPage() {
       FX.drawBar(ctx, p2X, topY, barW, barH, g.p2.hp / g.p2.hpMax, g.p2.trailHp / g.p2.hpMax, "right", "#7de8ff", "#0891b2", frame);
       FX.drawTimer(ctx, W, topY, g.timer);
 
-      FX.outlinedText(ctx, `1P: ${g.p1.cfg.name}`, p1X, topY + barH + 18, 13, "#7dffb6", "#000", "left", 3);
-      FX.outlinedText(ctx, `${g.mode === "cpu" ? "CPU" : "2P"}: ${g.p2.cfg.name}`, p2X + barW, topY + barH + 18, 13, "#7de8ff", "#000", "right", 3);
+      FX.outlinedText(ctx, `${g.labels?.p1 || "1P"}: ${g.p1.cfg.name}`, p1X, topY + barH + 18, 13, "#7dffb6", "#000", "left", 3);
+      FX.outlinedText(ctx, `${g.labels?.p2 || (g.mode === "cpu" ? "CPU" : "2P")}: ${g.p2.cfg.name}`, p2X + barW, topY + barH + 18, 13, "#7de8ff", "#000", "right", 3);
       FX.outlinedText(ctx, "★".repeat(g.p1Wins) + "☆".repeat(Math.max(0, 2 - g.p1Wins)), p1X + barW - 4, topY + barH + 18, 15, "#ffd60a", "#000", "right", 3);
       FX.outlinedText(ctx, "★".repeat(g.p2Wins) + "☆".repeat(Math.max(0, 2 - g.p2Wins)), p2X + 4, topY + barH + 18, 15, "#ffd60a", "#000", "left", 3);
 
@@ -1202,11 +1240,10 @@ function ArenaPage() {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [mode, p1Pick, p2Pick, stageIdx, aiDiffId]);
+  }, [mode, p1Pick, p2Pick, stageIdx, aiDiffId, matchKey]);
 
   function toggleMute() {
-    sfx.muted = !muted;
-    setMuted(!muted);
+    audio.setMuted(!muted);
   }
 
   return (
@@ -1238,6 +1275,16 @@ function ArenaPage() {
             >
               [ 1P vs CPU 單人自由對戰電腦 ]
             </button>
+            <button
+              onClick={() => setShowOnline((v) => !v)}
+              className={`px-3 py-1.5 border font-bold transition ${
+                showOnline || online
+                  ? "border-[#ffd60a] text-[#ffd60a] crpg-glow-yellow bg-[#0f3a26]/50"
+                  : "border-[#0f3a26] text-[#3a8c5e]"
+              }`}
+            >
+              [ 線上即時對戰 ]
+            </button>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -1264,7 +1311,7 @@ function ArenaPage() {
               onClick={toggleMute}
               className="px-2.5 py-1 border border-[#0f3a26] text-[#cfeedd] hover:border-[#00ff88]"
             >
-              {muted ? "音效：關" : "音效：開"}
+              {muted ? "聲音：關" : "聲音：開"}
             </button>
             <button
               onClick={() => startNewMatch(mode, p1Pick, p2Pick, stageIdx, aiDiffId)}
@@ -1281,6 +1328,10 @@ function ArenaPage() {
           </div>
         </div>
 
+        {(showOnline || online) && (
+          <DuelPanel fighter={p1Pick} stage={stageIdx} netRef={netRef} onStart={startOnline} onStop={stopOnline} />
+        )}
+
         {/* Left 1P & Right 2P / CPU Character Pickers */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 text-xs">
           <Panel title="選擇 1P 角色 (左半邊鍵盤：WASD 移動 + F / G / R / T / Y / Q 出招)">
@@ -1288,7 +1339,7 @@ function ArenaPage() {
               {FIGHTERS.map((f) => (
                 <button
                   key={f.id}
-                  onClick={() => setP1Pick(f.id)}
+                  onClick={() => !online && setP1Pick(f.id)}
                   className={`p-2 border text-left transition ${
                     p1Pick === f.id
                       ? "border-[#00ff88] bg-[#0f3a26]/50 text-[#00ff88] shadow-sm"
@@ -1316,7 +1367,7 @@ function ArenaPage() {
               {FIGHTERS.map((f) => (
                 <button
                   key={f.id}
-                  onClick={() => setP2Pick(f.id)}
+                  onClick={() => !online && setP2Pick(f.id)}
                   className={`p-2 border text-left transition ${
                     p2Pick === f.id
                       ? "border-[#00e5ff] bg-[#0f3a26]/50 text-[#00e5ff] shadow-sm"
@@ -1343,7 +1394,7 @@ function ArenaPage() {
               {STAGES.map((s, idx) => (
                 <button
                   key={s.id}
-                  onClick={() => setStageIdx(idx)}
+                  onClick={() => !online && setStageIdx(idx)}
                   className={`px-2 py-0.5 border text-[10px] ${
                     stageIdx === idx
                       ? "border-[#00ff88] text-[#00ff88]"
@@ -1361,6 +1412,7 @@ function ArenaPage() {
             height={450}
             className="w-full max-w-[900px] aspect-[900/450] border border-[#0f3a26] bg-[#050c09] rounded"
           />
+          <TouchControls buttons={ARENA_BUTTONS} anchor={canvasRef} />
         </div>
 
         {/* Split Left / Right Keyboard Controls Cheat Sheet */}
