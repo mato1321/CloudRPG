@@ -12,6 +12,8 @@ if [ ! -d .git ]; then
 fi
 git fetch -q origin main
 git reset -q "$DEPLOYED_COMMIT"   # 只設定 HEAD 與 index，工作目錄的檔案不變
+# 舊 commit 還追蹤 .env：先移出 index，之後 reset --hard 才不會刪掉或覆蓋 EC2 上的 .env
+git rm -q --cached --ignore-unmatch backend/.env fronted/.env
 echo "與 $DEPLOYED_COMMIT 不同的追蹤檔案："
 git status --short --untracked-files=no | head -30
 

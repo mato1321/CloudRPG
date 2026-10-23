@@ -58,6 +58,10 @@ healthy_frontend() {
 apply() {  # $1 = 要部署的 commit，$2 = 跟哪個 commit 比較變動
   local target=$1 base=$2 files
   files=$(git diff --name-only "$base" "$target")
+  # 舊 commit 還追蹤 .env：切過去會用 repo 裡的舊密碼覆蓋（或刪掉）EC2 上的 .env，一律拒絕
+  if git cat-file -e "$target:backend/.env" 2>/dev/null || git cat-file -e "$target:fronted/.env" 2>/dev/null; then
+    echo "${target:0:7} 還在追蹤 .env，拒絕部署"; return 1
+  fi
   git reset -q --hard "$target" || return 1   # 只動 git 追蹤的檔案；.env、venv、node_modules、dist 不受影響
   if echo "$files" | grep -q '^backend/requirements.txt$'; then
     backend/venv/bin/pip install -q -r backend/requirements.txt || return 1
