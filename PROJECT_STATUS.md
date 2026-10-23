@@ -11,7 +11,8 @@
 - **以上都已修好，部署到 EC2 並在實機驗證過**（第 3 節）。
 - **第二輪（2026-10-23）**：格鬥畫面全面升級（各職業 / Boss 專屬外型、招式特效、Boss 專屬機制、武器外觀隨黑市購買進化、戰鬥中快速黑市），前端改成正式 build 部署，載入請求數 70+ → 5（第 9 節）。
 - **第三輪（2026-10-23，commit `278fb33`）**：改成多人線上遊戲——伺服器端經濟與戰鬥驗證（防作弊）、限流、隨機掉寶、故障之塔、每日挑戰、世界 Boss、真的公會（公會 Boss + 公會聊天）、非同步 PvP、WebSocket 聊天室、排行榜、訪客模式 + 綁定帳號、新手教學。已部署到 EC2 並在正式站驗證（第 10 節）。
-- **⚠️ 發現嚴重資安問題需要你本人處理**：資料庫密碼和 JWT 金鑰被 commit 在**公開**的 GitHub repo，而且 RDS 對全世界開放 5432 port（第 4 節）。
+- **第四輪（2026-10-23）資安與維運**：換掉外洩的 RDS 密碼與 `SECRET_KEY`、`.env` 移出 git、RDS 只允許 EC2 連線、關閉多餘 port、關掉 `admin` 特權；EC2 改成 git checkout + 每 5 分鐘自動部署（CI 通過才部署、失敗自動回滾）；CloudWatch Agent + 8 個告警；Locust 壓力測試（舒適容量約 400–500 人同時在線）。詳見第 11 節。
+- ~~⚠️ 發現嚴重資安問題需要你本人處理~~ → 已在第四輪處理（第 4 節）。
 
 ---
 
@@ -32,12 +33,13 @@ EC2 關機時：喚醒網址（Lambda Function URL）──▶ StartInstances �
 | 後端服務 | systemd `cloudrpg-backend` → `uvicorn app.main:app --port 8000` |
 | 前端服務 | systemd `cloudrpg-frontend` → `npm run start`（**正式 build**，2026-10-23 起；原本是 `npm run dev` 開發模式）port 4173 |
 | Nginx | `/api/ws` → :8000（WebSocket upgrade，`proxy_read_timeout 3600s`，第三輪新增）、`/api/` 與 `/health` → :8000、其他 → :4173 |
-| 資料庫 | RDS **PostgreSQL** `cloudrpg-db`（publicly accessible）。**自動備份已開啟：保留 7 天**，備份時段 18:00–18:30 UTC（台灣 02:00） |
+| 資料庫 | RDS **PostgreSQL** `cloudrpg-db`（publicly accessible，但安全群組只允許 EC2）。**自動備份已開啟：保留 7 天**，備份時段 18:00–18:30 UTC（台灣 02:00） |
 | 喚醒頁 | Lambda `cloudrpg-wake`（角色 `LabRole`）：https://u22bkmoz6n7547l75ovss2hrqi0peogd.lambda-url.us-east-1.on.aws/ ，原始碼 `deploy/wake_lambda/lambda_function.py`；`?to=/raid` 可指定頁面（已防開放轉址） |
-| 部署方式 | 本機打包 tar，經 EC2 Instance Connect 上傳；EC2 上的專案**不是 git repo** |
-| 磁碟 | 6.7 GB；第一輪清理後 83%，第三輪部署後 **90%（剩約 720 MB）** |
-| 安全群組 | `sg-083d09c1c87ef2f90`（EC2 與 RDS 共用）：22、80、443、4173、5173、8000、5432 全對 `0.0.0.0/0` 開放 |
-| EC2 金鑰 | 沒有 key pair、沒有 IAM role；要連線請用 Console 的 **EC2 Instance Connect** |
+| 部署方式 | **EC2 上的 `~/CloudRPG` 是 GitHub repo 的 git checkout**；systemd timer `cloudrpg-deploy.timer` 每 5 分鐘執行 `deploy/auto_deploy.sh`：`main` 有新 commit 且 CI 通過 → 更新並只重啟有變動的部分，健康檢查失敗自動回滾（第 11 節） |
+| 磁碟 | 6.7 GB；第四輪清理 apt 快取後約 **88%（剩約 870 MB）**，並設定 apt 自動清理。最大的是 `fronted/node_modules`（590 MB）與 `/opt/aws`（250 MB，CloudWatch Agent）；長期建議把 EBS 加大到 12 GB 以上 |
+| 安全群組 | EC2：`sg-083d09c1c87ef2f90` 只開 22（EC2 Instance Connect）、80、443。RDS：`sg-05ce5f3a6457a4098`（`cloudrpg-rds-sg`）5432 **只允許來源 = EC2 的安全群組**。4173、5173、8000 已關閉（第四輪） |
+| EC2 金鑰 / 角色 | 沒有 key pair，要連線請用 Console 的 **EC2 Instance Connect**；IAM：`LabInstanceProfile`（第四輪掛上，給 CloudWatch Agent 用） |
+| 監控 | CloudWatch Agent（記憶體 / swap / 磁碟）+ 8 個告警 → SNS 主題 `cloudrpg-alerts`（第 11 節） |
 | 不能用的服務 | CloudFront（Learner Lab 拒絕 `cloudfront:List`），所以沒有 CDN / HTTPS 代理 |
 
 > `FINAL_PROJECT_REPORT.md` 寫的是「RDS MySQL」和「progress 表」，實際是 **PostgreSQL**，劇情進度存在 `users.game_progress` 欄位（第三輪起金幣 / 等級 / 道具 / 裝備改存 `player_profiles` 表，由伺服器計算），報告需要更正。
@@ -127,7 +129,7 @@ cd ~/CloudRPG && tar xzf ~/backups/pre-fix-20261022-155657.tgz && sudo systemctl
 
 ---
 
-## 4. ⚠️ 需要你本人處理的資安問題（我沒有動）
+## 4. 資安問題（第 1–3、5 點已在第四輪處理，見第 11 節）
 
 1. **資料庫密碼與 JWT 金鑰外洩**：`backend/.env`、`fronted/.env` 從 2026-05-24 起被 commit 在**公開**的 GitHub repo，裡面有 RDS 連線字串（含密碼）和 `SECRET_KEY`。
    - 到 RDS Console 修改 master password → 更新 EC2 上的 `backend/.env` → `sudo systemctl restart cloudrpg-backend`
@@ -255,25 +257,29 @@ cd ~/CloudRPG && tar xzf ~/backups/pre-fix-20261022-155657.tgz && sudo systemctl
 ## 8. 下一步行動清單
 
 - [x] commit 本次修改與 `arena.tsx`、`StoryBattleArena.tsx` 並 push（2026-10-23；舊版放在 `backups/`）
-- [ ] 換 RDS 密碼、換 `SECRET_KEY`、把 `.env` 移出 git
-- [ ] RDS 5432 只允許 EC2；安全群組移除 4173、5173、8000
+- [x] 換 RDS 密碼、換 `SECRET_KEY`、把 `.env` 移出 git（第四輪）
+- [x] RDS 5432 只允許 EC2；安全群組移除 4173、5173、8000（第四輪）
 - [ ] 更正 `FINAL_PROJECT_REPORT.md`、`TROUBLESHOOTING.md` 裡的舊 IP（`44.205.216.47`）與 MySQL → PostgreSQL
-- [ ] EC2 改用 git 部署
+- [x] EC2 改用 git 部署 + 定時自動部署（第四輪）
 - [x] 前端改正式 build（2026-10-23）
 - [x] 格鬥畫面升級、Boss 專屬機制、武器外觀與黑市整合（2026-10-23）
 - [x] commit 第二輪新增的 `battleFx.ts`、`ShopModal.tsx`、`lib/shop.ts`、`deploy/` 資料夾，新增中英文 `README.md`
 - [x] 遊戲功能：排行榜 + WebSocket 聊天，以及塔、每日、世界 Boss、公會、PvP、訪客模式（第三輪，2026-10-23，`278fb33`）
 - [x] Nginx 加 `/api/ws` WebSocket 設定（2026-10-23）
-- [ ] 正式站的 `ADMIN_USERNAMES` 決定要不要留 `admin`（第 4 節第 5 點）
-- [ ] 實機測試塔 / PvP / 公會（需要登入；正式站只驗證了公開頁面）
+- [x] 正式站 `ADMIN_USERNAMES=`（沒有管理員；前端也改成看伺服器判斷）
+- [x] 實機測試塔 / PvP / 公會（使用者用自己的帳號測過，2026-10-23）
+- [x] 商城頂部不顯示金幣（`TopBar` 沒有畫出 `headerExtra`，第四輪修正）
 - [ ] 實測喚醒頁「EC2 關機 → 自動開機」完整流程
-- [ ] EC2 磁碟只剩約 720 MB：清 npm 快取（`npm cache clean --force`）或刪舊備份
+- [x] EC2 磁碟清理（apt 快取、舊 snap）+ apt 自動清理設定
+- [ ] EBS 根磁碟加大到 12 GB 以上（目前 6.7 GB，核心更新與 node_modules 很容易又吃滿）
 - [x] GitHub Actions CI（`.github/workflows/ci.yml`：pytest on Python 3.11 / 3.14 + 前端 `npm ci` + `npm run build` + TEMP-DEBUG 檢查；push 到 main 與 PR 時執行）
-- [ ] 自動部署：Learner Lab 憑證會過期，不適合放 GitHub Secrets，建議改「EC2 定時 git pull」
-- [ ] k6 / Locust 壓力測試腳本
+- [x] 自動部署：EC2 定時 git pull（CI 通過才部署、失敗回滾）
+- [x] Locust 壓力測試腳本 + 正式站實測（`loadtest/README.md`）
+- [ ] 突破單程序瓶頸：限流與 WebSocket Hub 改用 Redis 後再開 `uvicorn --workers 2`；熱門唯讀 API 加短暫快取
 - [x] Sentry 程式整合：`requirements.txt` 加 `sentry-sdk[fastapi]`；後端例外 + 瀏覽器 / SSR 錯誤（經 `/api/telemetry/error` 轉送）共用一組 DSN（`backend/app/core/monitoring.py`、`tests/test_monitoring.py` 5 個測試；沒裝 sentry-sdk 時後端照常啟動）
-- [ ] Sentry 上線：到 sentry.io 建專案取得 DSN → EC2 `backend/.env` 加 `SENTRY_DSN` → `venv/bin/pip install -r requirements.txt` → 重啟後端（步驟見 README「錯誤監控」）
-- [ ] CloudWatch 告警（EC2 沒有 instance profile，記憶體指標需要 CloudWatch Agent）
+- [ ] ~~Sentry 上線~~（決定不使用；程式沒有 DSN 時不會動作）
+- [x] CloudWatch Agent + 8 個告警（第四輪）
+- [ ] 告警通知：在 SNS 主題 `cloudrpg-alerts` 訂閱 email（需要到信箱點確認）
 - [ ] 手機虛擬搖桿
 
 ---
@@ -445,6 +451,70 @@ cd ~/CloudRPG && tar xzf ~/backups/pre-round3-20261023-071904.tgz backend/app fr
 - WebSocket：從外部經 Nginx 連 `/api/ws` → `101 Switching Protocols`，收到 `{"type":"hello","online":1}`；開第二條連線後，raid 頁的「X 人在線」自動從 1 變成 2
 - 瀏覽器：大廳（即時在線人數、世界 Boss、每日關卡）、`/raid`、`/daily`、`/ranking`、`/play`（訪客選職業）都正常，console 沒有錯誤；`/tower`、`/pvp`、`/guild` 未登入時導到登入頁
 - **還沒驗證**：登入後實際玩塔 / PvP / 公會（正式站不替使用者建立測試帳號）；喚醒頁「關機 → 自動開機」
+
+---
+
+## 11. 第四輪：資安、自動部署、監控、壓力測試（2026-10-23）
+
+### 11.1 資安
+
+| 項目 | 做法 | 驗證 |
+|---|---|---|
+| RDS 密碼外洩 | 產生新的 32 字元密碼，用 `modify-db-instance` 更換，同時更新 EC2 的 `backend/.env`（新密碼沒有出現在任何輸出或 repo 裡） | 舊密碼連線被拒（`password authentication failed`），新密碼正常 |
+| `SECRET_KEY` 外洩 | 換成新的 64 字元隨機金鑰 | 所有舊的登入 token 失效，玩家需要重新登入一次（屬正常） |
+| `.env` 在公開 repo | `git rm --cached backend/.env fronted/.env`，`.gitignore` 忽略 `.env` / `.env.*`，保留 `.env.example`（`fronted/.env.example` 新增） | 舊密碼仍在 git 歷史裡，但已經失效 |
+| RDS 對全世界開放 | 新增安全群組 `cloudrpg-rds-sg`（`sg-05ce5f3a6457a4098`）：5432 只允許來源 = EC2 的安全群組，RDS 改掛這個群組 | 從外部連 5432 逾時；EC2 後端正常 |
+| 多餘的對外 port | EC2 安全群組移除 4173、5173、8000、5432；只剩 22、80、443 | 外部連 8000 / 4173 / 5173 逾時、80 正常。也堵住了「直接連 :8000 偽造 `X-Real-IP` 繞過限流」的漏洞 |
+| `admin` 黑市免費 | EC2 `backend/.env` 設 `ADMIN_USERNAMES=`（沒有管理員）；前端原本也只看帳號名稱是不是 `admin`，改成以伺服器回傳的 `isAdmin` / 金幣為準 | — |
+| `DEBUG=True` | 正式站關掉（原本會把每一條 SQL 與參數寫進 log，也吃磁碟） | log 裡不再有 SQL |
+
+備份：EC2 `~/backups/pre-security-20261023-083924.tgz`（含舊 `.env`，權限 600）、`~/backups/backend.env.20261023-084709`（新 `.env`）。
+
+### 11.2 自動部署（EC2 定時 git pull）
+
+- EC2 上的 `~/CloudRPG` 改成 GitHub repo 的 git checkout（`deploy/setup_git_deploy.sh`，只需執行一次）。
+- `cloudrpg-deploy.timer` 每 5 分鐘執行 `deploy/auto_deploy.sh`：
+  1. `git fetch`，`main` 沒有新 commit 就結束
+  2. 用 GitHub API 確認這個 commit 的 **CI 通過**才部署（CI 還在跑就下次再看，失敗就不部署）
+  3. `git reset --hard` 到新 commit（只動追蹤的檔案；`.env`、`venv`、`node_modules`、`dist` 不受影響）
+  4. 只重啟有變動的部分：`backend/requirements.txt` 變了才 `pip install`、`backend/` 變了才重啟後端、`fronted/` 變了才重新 build 前端
+  5. 健康檢查（`/health`、`/api/worldboss`、前端首頁）失敗 → 自動回滾到上一個 commit，並記住失敗的 commit 不再重試
+  6. 拒絕部署任何還在追蹤 `.env` 的舊 commit，避免 repo 裡的舊密碼覆蓋或刪掉 EC2 上的 `.env`
+- 看紀錄：`journalctl -u cloudrpg-deploy -n 50`；手動觸發：`sudo systemctl start cloudrpg-deploy`
+- 實測：push `1f4b258` 後約 5 分鐘，timer 自動完成部署（`部署 a45f5c7 → 1f4b258`）
+- 不需要 AWS 憑證，也不用把 Learner Lab 憑證放進 GitHub Secrets
+
+### 11.3 CloudWatch 監控
+
+- EC2 掛上 `LabInstanceProfile`，安裝 CloudWatch Agent（`deploy/setup_cloudwatch.sh` + `deploy/cloudwatch-agent.json`），每 60 秒上傳記憶體、swap、根目錄磁碟使用率。
+- SNS 主題 `cloudrpg-alerts` + 8 個告警：
+
+| 告警 | 條件 |
+|---|---|
+| `cloudrpg-ec2-cpu-high` | EC2 CPU 平均 > 80% 持續 10 分鐘 |
+| `cloudrpg-ec2-cpu-credit-low` | t3.micro CPU credit < 20（之後會被降速） |
+| `cloudrpg-ec2-status-check-failed` | 系統狀態檢查失敗 → **自動復原主機** + 通知 |
+| `cloudrpg-ec2-instance-check-failed` | 執行個體狀態檢查失敗（作業系統沒回應） |
+| `cloudrpg-ec2-memory-high` | 記憶體 > 90% 持續 10 分鐘 |
+| `cloudrpg-ec2-disk-high` | 根目錄磁碟 > 90% |
+| `cloudrpg-rds-cpu-high` | RDS CPU 平均 > 80% 持續 10 分鐘 |
+| `cloudrpg-rds-storage-low` | RDS 剩餘空間 < 2 GB |
+
+- 建好後 `cloudrpg-ec2-disk-high` 立刻觸發（93%）：apt 每日更新又下載了約 300 MB 套件，而系統設定 `AutocleanInterval "0"` 從不清理。已清掉並新增 `/etc/apt/apt.conf.d/99cloudrpg-clean`（安裝後不保留 .deb、每天自動清理）。
+- **通知還沒有收件人**：要在 SNS 主題訂閱 email，並到信箱點確認連結。
+
+### 11.4 壓力測試
+
+`loadtest/locustfile.py`（Locust），結果與分析見 [`loadtest/README.md`](loadtest/README.md)。重點：
+
+- **舒適容量約 400–500 人同時在線**（p95 < 0.6 秒，含 220 ms 跨洋延遲）；最大吞吐量約 130–140 req/s；到 1000 人也沒有請求失敗，但延遲到十幾秒。
+- **瓶頸是單一 uvicorn 程序**（CPU 卡在 2 個 vCPU 中的 1 個），不是記憶體或資料庫。
+- 下一步：限流與 WebSocket Hub 改用 Redis 後開 `--workers 2`；熱門唯讀 API 加幾秒鐘的快取。
+
+### 11.5 其他修正
+
+- **商城不顯示金幣**：`TopBar` 收到 `headerExtra` 卻從來沒畫出來，所以商城和故事模式頂部的職業 / 金幣都消失了。已修正（`be821df`）。
+- `deploy/update_frontend.sh` 只等 5 秒就檢查前端，vite preview 啟動較慢時會誤判失敗。改成最多等 60 秒（`1f4b258`）。
 
 ---
 

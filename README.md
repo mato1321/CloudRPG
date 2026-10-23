@@ -112,7 +112,8 @@ CloudRPG/
 │       ├── routes/          頁面：index、play、tower、daily、raid、pvp、guild、ranking、arena、market、codex、login、register
 │       ├── components/crpg/ 遊戲元件：StoryBattleArena、battleFx、ModeBattle、ChatPanel、GearPanel、ShopModal、Shell…
 │       └── lib/             api（REST + WebSocket）、shop、gear、classes、useProfile、telemetry
-├── deploy/                  EC2 部署設定（systemd service、前端更新腳本）、wake_lambda（喚醒頁）
+├── deploy/                  EC2 部署設定（systemd service、自動部署、CloudWatch Agent、前端更新腳本）、wake_lambda（喚醒頁）
+├── loadtest/                Locust 壓力測試腳本與結果
 ├── backups/                 舊版程式碼備份（不會被編譯）
 ├── PROJECT_STATUS.md        專案現況、修復紀錄、部署紀錄、待辦
 ├── FINAL_PROJECT_REPORT.md  期末報告
@@ -172,6 +173,10 @@ npm run dev                     # http://localhost:4173
 
 3. Nginx：`/api/ws` 轉到 `127.0.0.1:8000` 並開啟 WebSocket upgrade（`Upgrade` / `Connection` 標頭、`proxy_read_timeout 3600s`）；`/api/` 與 `/health` 轉到 `127.0.0.1:8000`；其餘轉到 `127.0.0.1:4173`。
 4. EC2 使用 Elastic IP（`54.161.3.74`），重開 lab 後 IP 不變。EC2 關機時可以開喚醒網址（`deploy/wake_lambda/`），它會自動開機並在伺服器就緒後轉回遊戲。
+5. **自動部署**：EC2 上的 `~/CloudRPG` 是這個 repo 的 git checkout（第一次用 `deploy/setup_git_deploy.sh` 設定）。`cloudrpg-deploy.timer` 每 5 分鐘檢查 `main`：有新 commit **而且 CI 通過**就更新程式、只重啟有變動的部分，健康檢查失敗會自動回滾。平常只要 push 到 `main`，幾分鐘後就會上線（紀錄：`journalctl -u cloudrpg-deploy -n 50`）。
+6. **安全群組**：EC2 只開 22（EC2 Instance Connect）、80、443；RDS 的 5432 只允許來自 EC2 的安全群組。`.env` 不進 git，範本在 `backend/.env.example`、`fronted/.env.example`。
+7. **監控**：CloudWatch Agent（`deploy/setup_cloudwatch.sh`）上傳記憶體 / 磁碟指標，CPU、記憶體、磁碟、狀態檢查、RDS 共 8 個告警發到 SNS 主題 `cloudrpg-alerts`。
+8. **壓力測試**：Locust 腳本與 t3.micro 實測結果在 [`loadtest/`](loadtest/README.md)（舒適容量約 400–500 人同時在線）。
 
 ### 錯誤監控（Sentry，選填）
 
@@ -302,7 +307,8 @@ CloudRPG/
 │       ├── routes/          Pages: index, play, tower, daily, raid, pvp, guild, ranking, arena, market, codex, login, register
 │       ├── components/crpg/ Game components: StoryBattleArena, battleFx, ModeBattle, ChatPanel, GearPanel, ShopModal, Shell…
 │       └── lib/             api (REST + WebSocket), shop, gear, classes, useProfile, telemetry
-├── deploy/                  EC2 deployment files (systemd service, frontend update script), wake_lambda (wake-up page)
+├── deploy/                  EC2 deployment files (systemd services, auto deploy, CloudWatch Agent, frontend update script), wake_lambda (wake-up page)
+├── loadtest/                Locust load-test script and results
 ├── backups/                 Old source versions (not built)
 ├── PROJECT_STATUS.md        Status, fix log, deployment log, to-dos (Chinese)
 ├── FINAL_PROJECT_REPORT.md  Final course report (Chinese)
@@ -362,6 +368,10 @@ The frontend picks the API and WebSocket address automatically: same origin when
 
 3. Nginx: `/api/ws` goes to `127.0.0.1:8000` with WebSocket upgrade enabled (`Upgrade` / `Connection` headers, `proxy_read_timeout 3600s`); `/api/` and `/health` go to `127.0.0.1:8000`; everything else goes to `127.0.0.1:4173`.
 4. The instance uses an Elastic IP (`54.161.3.74`), so the address survives lab restarts. When the instance is stopped, open the wake-up URL (`deploy/wake_lambda/`): it starts the instance and redirects back to the game once the server is ready.
+5. **Auto deploy**: `~/CloudRPG` on the instance is a git checkout of this repo (set up once with `deploy/setup_git_deploy.sh`). Every 5 minutes `cloudrpg-deploy.timer` checks `main`; when there is a new commit **and CI passed**, it updates the code, restarts only what changed, and rolls back if the health check fails. Pushing to `main` is enough to ship (log: `journalctl -u cloudrpg-deploy -n 50`).
+6. **Security groups**: the instance only exposes 22 (EC2 Instance Connect), 80 and 443; RDS port 5432 only accepts the EC2 security group. `.env` files are not in git; templates are `backend/.env.example` and `fronted/.env.example`.
+7. **Monitoring**: the CloudWatch Agent (`deploy/setup_cloudwatch.sh`) ships memory / disk metrics, and 8 alarms (CPU, memory, disk, status checks, RDS) notify the SNS topic `cloudrpg-alerts`.
+8. **Load testing**: the Locust script and t3.micro results are in [`loadtest/`](loadtest/README.md) (comfortable capacity is about 400–500 concurrent players).
 
 ### Error monitoring (Sentry, optional)
 
