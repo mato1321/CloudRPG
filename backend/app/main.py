@@ -18,7 +18,7 @@ from app.db.database import Base, engine
 from app.models import game as _game_models  # noqa: F401 讓 create_all 建立新資料表
 from app.models.character import Character  # noqa: F401
 from app.models.user import User  # noqa: F401
-from app.api import auth, character, combat, modes, profile, progress, social
+from app.api import admin, auth, character, combat, modes, profile, progress, social
 
 # 創建所有表（只會新增不存在的表，不會動到既有資料）
 Base.metadata.create_all(bind=engine)
@@ -63,6 +63,7 @@ app.include_router(profile.router)
 app.include_router(combat.router)
 app.include_router(modes.router)
 app.include_router(social.router)
+app.include_router(admin.router)
 
 
 @app.get("/")

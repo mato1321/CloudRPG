@@ -225,11 +225,12 @@ def finish(req: FinishReq, user: User = Depends(get_current_user), db: Session =
 
     if mode == "story" and win:
         base = D.ENEMIES[sess.enemy_key]
-        rewards["xp"], rewards["gold"] = base["xp"], base["gold"]
+        first = sess.enemy_key not in p.get("bossesDefeated", [])
+        scale = 1.0 if first else E.repeat_scale(sess.enemy_key)  # 重複刷同一個敵人：獎勵打折
+        rewards["xp"], rewards["gold"] = int(base["xp"] * scale), int(base["gold"] * scale)
         drop = base.get("drop")
         if drop and not p.get("inv", {}).get(drop):
             rewards["items"][drop] = 1
-        first = sess.enemy_key not in p.get("bossesDefeated", [])
         if first:
             p.setdefault("bossesDefeated", []).append(sess.enemy_key)
             if base.get("boss"):
@@ -298,7 +299,11 @@ def finish(req: FinishReq, user: User = Depends(get_current_user), db: Session =
         row.rating = max(100, my_rating + delta)
         if win:
             row.pvp_wins = (row.pvp_wins or 0) + 1
-            rewards["gold"], rewards["xp"] = 80, 60
+            earn = E.daily_earn(p, S.today())
+            earn["pvpWins"] += 1
+            is_bot = (sess.ref or "").startswith("bot:")
+            gold = D.PVP_WIN_GOLD["bot" if is_bot else "player"] if earn["pvpWins"] <= D.PVP_DAILY_GOLD_WINS else 0
+            rewards["gold"], rewards["xp"] = gold, 60
         else:
             row.pvp_losses = (row.pvp_losses or 0) + 1
         if sess.ref and not sess.ref.startswith("bot:"):
@@ -309,11 +314,12 @@ def finish(req: FinishReq, user: User = Depends(get_current_user), db: Session =
         extra["pvp"] = {"rating": row.rating, "delta": delta, "wins": row.pvp_wins, "losses": row.pvp_losses}
 
     E.add_items(p, rewards["items"])
+    rewards["gold"] = E.apply_income(p, rewards["gold"], S.today())  # 每日金幣軟上限
     p["gold"] += rewards["gold"]
     level_ups = E.grant_xp(p, rewards["xp"])
     sess.status = "won" if win else "lost"
     sess.finished_at = now
-    sess.result = {"duration": duration, "elapsed": elapsed_ms, "damage": req.damage, "combo": req.max_combo, "rewards": {k: rewards[k] for k in ("xp", "gold")}}
+    sess.result = {"duration": duration, "elapsed": elapsed_ms, "damage": req.damage, "combo": req.max_combo, "hpRatio": round(hp_ratio, 3), "rewards": {k: rewards[k] for k in ("xp", "gold")}}
     S.save(db, row, p)
     return {
         "ok": True,

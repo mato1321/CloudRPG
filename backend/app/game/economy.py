@@ -408,7 +408,34 @@ def tower_floor(seed: int, floor: int) -> dict:
 
 
 def tower_rewards(floor: int) -> dict:
-    return {"xp": 25 * floor + 30, "gold": 40 * floor + 60}
+    return {"xp": 25 * floor + 30, "gold": 40 * min(floor, D.TOWER_GOLD_FLOOR_CAP) + 60}
+
+
+def repeat_scale(enemy_key: str) -> float:
+    """故事敵人重複擊敗時的獎勵比例"""
+    if enemy_key in D.REPEAT_REWARD:
+        return D.REPEAT_REWARD[enemy_key]
+    return D.REPEAT_REWARD["boss" if D.ENEMIES[enemy_key].get("boss") else "mob"]
+
+
+def daily_earn(p: dict, day: str) -> dict:
+    """當天的戰鬥收入紀錄（存在 profile 裡，換日自動歸零）"""
+    e = p.get("earn")
+    if not isinstance(e, dict) or e.get("day") != day:
+        e = {"day": day, "gold": 0, "pvpWins": 0}
+        p["earn"] = e
+    return e
+
+
+def apply_income(p: dict, gold: int, day: str) -> int:
+    """戰鬥金幣進帳：超過每日軟上限的部分只給 SOFT_CAP_RATE，總數不超過硬上限；回傳實際入帳的金幣"""
+    e = daily_earn(p, day)
+    room = max(0, D.DAILY_GOLD_SOFT_CAP - e["gold"])
+    full = min(gold, room)
+    got = full + int((gold - full) * D.SOFT_CAP_RATE)
+    got = max(0, min(got, D.DAILY_GOLD_HARD_CAP - e["gold"]))
+    e["gold"] += got
+    return got
 
 
 def day_seed(day: str) -> int:

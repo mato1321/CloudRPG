@@ -110,6 +110,15 @@ WORLD_BOSSES = [
 GUILD_BOSS = {"key": "skyisle", "name": "公會試煉：天光守護者", "base_hp": 30_000, "per_member": 12_000}
 RAID_TIME_LIMIT = 45  # 秒
 
+# ── 平衡：避免無限刷金幣造成通膨（數值依據見 backend/tools/economy_sim.py 與 /api/admin/balance）──
+REPEAT_REWARD = {"boss": 0.25, "mob": 0.5, "admin": 0.05}  # 故事敵人「重複擊敗」的獎勵比例（可指定敵人）；第一次擊敗全額
+DAILY_GOLD_SOFT_CAP = 15_000  # 每天（台灣日期）從戰鬥賺的金幣超過這個數字後……
+SOFT_CAP_RATE = 0.1  # ……之後的戰鬥金幣只給 10%
+DAILY_GOLD_HARD_CAP = 30_000  # 一天最多從戰鬥拿到這麼多金幣（黑市一次性商品全部約 2.7 萬）
+TOWER_GOLD_FLOOR_CAP = 40  # 故障之塔的金幣只算到第 40 層（經驗照樣成長）
+PVP_WIN_GOLD = {"player": 80, "bot": 20}  # 打贏真人 / Bot 的金幣
+PVP_DAILY_GOLD_WINS = 10  # 每天前 10 場 PvP 勝利才給金幣（經驗照給）
+
 # ── 公會 ──
 GUILD_CREATE_PRICE = 1000
 GUILD_MAX_MEMBERS = 30
