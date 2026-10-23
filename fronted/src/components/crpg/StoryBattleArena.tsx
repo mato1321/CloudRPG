@@ -3,168 +3,21 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import * as FX from "./battleFx";
 import { weaponLoadout } from "../../lib/shop";
+import { audio, battleTheme } from "../../lib/audio";
+import { useAudioSettings } from "../../lib/useAudio";
+import { TouchControls, STORY_BUTTONS } from "./TouchControls";
 
-/* ───────────── WEB AUDIO ARCADE SYNTH ───────────── */
+/* ───────────── 音效：轉給共用音訊引擎（lib/audio.ts） ───────────── */
+
+const STORY_SFX: Record<string, string> = {
+  hadouken: "proj", shoryuken: "rising", super: "ult", talk: "talk", hazard: "hazard",
+};
 
 class StoryArcadeAudio {
-  ctx: AudioContext | null = null;
-  muted = false;
-
-  init() {
-    if (typeof window === "undefined") return;
-    if (!this.ctx) {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (AudioCtx) this.ctx = new AudioCtx();
-    }
-    if (this.ctx && this.ctx.state === "suspended") {
-      this.ctx.resume().catch(() => {});
-    }
-  }
-
-  play(
-    type:
-      | "light"
-      | "heavy"
-      | "block"
-      | "hadouken"
-      | "shoryuken"
-      | "dash"
-      | "super"
-      | "ko"
-      | "jump"
-      | "heal"
-      | "assist"
-      | "talk"
-      | "portal"
-      | "hazard"
-  ) {
-    if (this.muted) return;
-    try {
-      this.init();
-      if (!this.ctx) return;
-      const now = this.ctx.currentTime;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-
-      if (type === "light") {
-        osc.type = "triangle";
-        osc.frequency.setValueAtTime(220, now);
-        osc.frequency.exponentialRampToValueAtTime(60, now + 0.08);
-        gain.gain.setValueAtTime(0.25, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
-        osc.start(now);
-        osc.stop(now + 0.08);
-      } else if (type === "heavy") {
-        osc.type = "sawtooth";
-        osc.frequency.setValueAtTime(160, now);
-        osc.frequency.exponentialRampToValueAtTime(38, now + 0.16);
-        gain.gain.setValueAtTime(0.35, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.16);
-        osc.start(now);
-        osc.stop(now + 0.16);
-      } else if (type === "block") {
-        osc.type = "square";
-        osc.frequency.setValueAtTime(880, now);
-        osc.frequency.exponentialRampToValueAtTime(420, now + 0.07);
-        gain.gain.setValueAtTime(0.18, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.07);
-        osc.start(now);
-        osc.stop(now + 0.07);
-      } else if (type === "hadouken") {
-        osc.type = "sine";
-        osc.frequency.setValueAtTime(280, now);
-        osc.frequency.exponentialRampToValueAtTime(620, now + 0.12);
-        osc.frequency.exponentialRampToValueAtTime(190, now + 0.28);
-        gain.gain.setValueAtTime(0.3, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.28);
-        osc.start(now);
-        osc.stop(now + 0.28);
-      } else if (type === "shoryuken") {
-        osc.type = "sawtooth";
-        osc.frequency.setValueAtTime(180, now);
-        osc.frequency.exponentialRampToValueAtTime(760, now + 0.25);
-        gain.gain.setValueAtTime(0.3, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
-        osc.start(now);
-        osc.stop(now + 0.25);
-      } else if (type === "dash") {
-        osc.type = "triangle";
-        osc.frequency.setValueAtTime(520, now);
-        osc.frequency.exponentialRampToValueAtTime(140, now + 0.22);
-        gain.gain.setValueAtTime(0.3, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.22);
-        osc.start(now);
-        osc.stop(now + 0.22);
-      } else if (type === "super") {
-        osc.type = "square";
-        osc.frequency.setValueAtTime(440, now);
-        osc.frequency.setValueAtTime(660, now + 0.08);
-        osc.frequency.setValueAtTime(880, now + 0.16);
-        osc.frequency.exponentialRampToValueAtTime(120, now + 0.45);
-        gain.gain.setValueAtTime(0.38, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.45);
-        osc.start(now);
-        osc.stop(now + 0.45);
-      } else if (type === "jump") {
-        osc.type = "sine";
-        osc.frequency.setValueAtTime(190, now);
-        osc.frequency.exponentialRampToValueAtTime(420, now + 0.11);
-        gain.gain.setValueAtTime(0.14, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.11);
-        osc.start(now);
-        osc.stop(now + 0.11);
-      } else if (type === "heal") {
-        osc.type = "sine";
-        osc.frequency.setValueAtTime(440, now);
-        osc.frequency.exponentialRampToValueAtTime(880, now + 0.22);
-        gain.gain.setValueAtTime(0.24, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.22);
-        osc.start(now);
-        osc.stop(now + 0.22);
-      } else if (type === "assist") {
-        osc.type = "triangle";
-        osc.frequency.setValueAtTime(330, now);
-        osc.frequency.setValueAtTime(550, now + 0.07);
-        osc.frequency.exponentialRampToValueAtTime(880, now + 0.22);
-        gain.gain.setValueAtTime(0.28, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.22);
-        osc.start(now);
-        osc.stop(now + 0.22);
-      } else if (type === "talk") {
-        osc.type = "square";
-        osc.frequency.setValueAtTime(520 + Math.random() * 160, now);
-        gain.gain.setValueAtTime(0.06, now);
-        gain.gain.exponentialRampToValueAtTime(0.005, now + 0.035);
-        osc.start(now);
-        osc.stop(now + 0.035);
-      } else if (type === "portal") {
-        osc.type = "sine";
-        osc.frequency.setValueAtTime(220, now);
-        osc.frequency.exponentialRampToValueAtTime(920, now + 0.35);
-        gain.gain.setValueAtTime(0.25, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
-        osc.start(now);
-        osc.stop(now + 0.35);
-      } else if (type === "hazard") {
-        osc.type = "sawtooth";
-        osc.frequency.setValueAtTime(480, now);
-        osc.frequency.exponentialRampToValueAtTime(90, now + 0.28);
-        gain.gain.setValueAtTime(0.26, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.28);
-        osc.start(now);
-        osc.stop(now + 0.28);
-      } else if (type === "ko") {
-        osc.type = "sawtooth";
-        osc.frequency.setValueAtTime(140, now);
-        osc.frequency.exponentialRampToValueAtTime(28, now + 0.65);
-        gain.gain.setValueAtTime(0.45, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.65);
-        osc.start(now);
-        osc.stop(now + 0.65);
-      }
-    } catch {}
+  klass = "warrior";
+  play(type: string) {
+    if (type === "proj_player") return audio.sfx(`proj_${this.klass}`);
+    audio.sfx(STORY_SFX[type] || type);
   }
 }
 
@@ -395,7 +248,15 @@ export function StoryBattleArena({
   tutorial = false, // 第一場戰鬥的互動教學
 }: any) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [muted, setMuted] = useState(false);
+  const { muted } = useAudioSettings();
+
+  // 戰鬥背景音樂：依場地 / 模式選曲；離開戰鬥時換回原本的音樂
+  useEffect(() => {
+    storySfx.klass = state.klass;
+    const prev = audio.theme;
+    audio.playTheme(battleTheme(enemyOverride?.pvp ? "dojo" : STAGE_OF[enemyKey] || "dojo", mode));
+    return () => audio.playTheme(prev);
+  }, [enemyKey, mode]);
   const [typingInInput, setTypingInInput] = useState(false);
 
   // ✅ 修復「角色無法移動」：指令輸入框 (autoFocus) 會吃掉 WASD，
@@ -832,7 +693,7 @@ export function StoryBattleArena({
       } else if (kind === "skill1") {
         attacker.attackDuration = 28;
         attacker.stateTimer = 28;
-        storySfx.play("hadouken");
+        storySfx.play("proj_player");
         addFloatingText(attacker.x, attacker.y - 95, skill1.name, attacker.cfg.color, 28);
         g.projectiles.push({
           owner: "p1",
@@ -1096,7 +957,7 @@ export function StoryBattleArena({
         g.hitStop = 18;
         g.hitFlash = 8;
         g.overclockTimer = 90;
-        storySfx.play("super");
+        audio.sfx("overclock");
         addFloatingText(ai.x, ai.y - 125, "SYSTEM OVERCLOCK // 系統強制超頻！", "#ff4d6d", 60);
         FX.emit(g, "code", ai.x, ai.y - 60, 40, { color: "#ff4d6d", speed: 6, life: 40 });
         FX.addFx(g, { type: "ring", x: ai.x, y: ai.y - 60, r0: 10, r1: 320, color: "#ff4d6d", life: 34, lw: 10 });
@@ -1109,6 +970,7 @@ export function StoryBattleArena({
       const half = ai.hp <= ai.hpMax * 0.5;
       if (ai.cfg.hazardType && ai.hazardCooldown === 0 && g.phase === "fight") {
         ai.hazardCycle = (ai.hazardCycle || 0) + 1;
+        audio.sfx("warn");
         const cx = (x: number) => Math.max(70, Math.min(830, x));
         const tx = cx(target.x);
         if (enemyKey === "abyss") {
@@ -1293,7 +1155,7 @@ export function StoryBattleArena({
         defender.hp = reviveHp;
         defender.invincibleTimer = 60;
         g.superFlash = 20;
-        storySfx.play("super");
+        storySfx.play("heal");
         spawnParticles(defender.x, defender.y - 50, "#a78bfa", 30, 7);
         addFloatingText(defender.x, defender.y - 115, "不死圖騰發動！復活 60% HP", "#a78bfa", 45);
         g.stats.items.totem++;
@@ -1375,15 +1237,17 @@ export function StoryBattleArena({
 
       if (winner === g.p1) {
         g.bannerText = "YOU WIN !!";
+        setTimeout(() => audio.sfx("victory"), 500);
         g.subBannerText = `成功擊敗 ${g.p2.cfg.name}！`;
       } else {
         g.bannerText = "DEFEATED...";
+        setTimeout(() => audio.sfx("defeat"), 500);
         g.subBannerText = "回村莊整備購買技能書或強化裝備後再戰！";
       }
     }
 
     function onHazardStrike(hz: any) {
-      storySfx.play("hazard");
+      audio.sfx(`hz_${hz.type}`);
       if (hz.type === "sky_lightning") {
         g.screenShake = 10;
         g.hitFlash = 4;
@@ -1445,7 +1309,7 @@ export function StoryBattleArena({
         if (g.phaseTimer === 24) {
           g.bannerText = "FIGHT !!";
           g.subBannerText = "鍵盤操作角色擊敗故事強敵！按 [E] 可呼叫隊友支援！";
-          storySfx.play("super");
+          storySfx.play("warn");
         }
         if (g.phaseTimer <= 0) {
           g.phase = "fight";
@@ -1963,13 +1827,10 @@ export function StoryBattleArena({
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => {
-              storySfx.muted = !muted;
-              setMuted(!muted);
-            }}
+            onClick={() => audio.setMuted(!muted)}
             className="px-2 py-0.5 border border-[#0f3a26] text-[#7be0a8] hover:border-[#00ff88] text-[11px]"
           >
-            {muted ? "音效關" : "音效開"}
+            {muted ? "聲音：關" : "聲音：開"}
           </button>
           {onOpenShopModal && (
             <button
@@ -1999,6 +1860,7 @@ export function StoryBattleArena({
           height={430}
           className="w-full aspect-[900/430] border border-[#0f3a26] bg-[#050c09] rounded shadow-lg"
         />
+        <TouchControls buttons={STORY_BUTTONS} anchor={canvasRef} />
         {typingInInput && (
           <button
             type="button"

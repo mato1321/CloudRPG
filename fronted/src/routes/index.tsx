@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Shell, Panel } from "../components/crpg/Shell";
 import { HpBar, RankTable } from "../components/crpg/GameUI";
 import { api, subscribeLive } from "../lib/api";
+import { useTheme } from "../lib/useAudio";
 
 export const Route = createFileRoute("/")({
   component: Lobby,
@@ -24,6 +25,7 @@ const NEWS = [
 ];
 
 function Lobby() {
+  useTheme("lobby");
   const [boss, setBoss] = useState(null);
   const [daily, setDaily] = useState(null);
   const [top, setTop] = useState([]);

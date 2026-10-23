@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { audio } from "../../lib/audio";
 /* ───────────── CLOUD RPG · 共用格鬥渲染與特效引擎 ─────────────
  * 故事模式 (StoryBattleArena) 與自由對戰 (/arena) 共用：
  *   1. drawFighter   ：骨架姿勢 + 分層繪製，每個職業 / Boss 有專屬體型、服裝與武器
@@ -2235,6 +2236,7 @@ export function onHit(g: any, attacker: any, defender: any, info: any = {}) {
     emit(g, "spark", defender.x + (defender.facing || 1) * 22, y, 10, { color: ["#00e5ff", "#ffffff"], speed: 5, life: 14 });
     return;
   }
+  audio.sfx(info.heavy ? "hit_heavy" : "hit");
   const col = info.color || fxColor(attacker);
   addFx(g, { type: "impact", x, y, size: info.heavy ? 40 : 26, color: col, life: info.heavy ? 14 : 10, rot: Math.random() * TAU });
   emit(g, "spark", x, y, info.heavy ? 18 : 10, { color: [col, "#ffffff", "#ffd60a"], speed: info.heavy ? 8 : 5.5, life: 16 });

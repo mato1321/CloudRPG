@@ -1,6 +1,8 @@
 // @ts-nocheck
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, Link } from "@tanstack/react-router";
+import { audio } from "../../lib/audio";
+import { useAudioSettings } from "../../lib/useAudio";
 
 const NAV = [
   { to: "/",          label: "LOBBY"  },
@@ -93,6 +95,7 @@ export function TopBar({ extra = null }) {
       </nav>
       <div className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1">
         {extra}
+        <SoundToggle />
         <Stat label="PING" value={`${ping}ms`} color={ping < 40 ? "text-[#00ff88] crpg-glow" : "text-[#ffd60a] crpg-glow-yellow"} />
         <Stat label="TIME" value={time} />
         {auth ? (
@@ -109,6 +112,21 @@ export function TopBar({ extra = null }) {
         )}
       </div>
     </header>
+  );
+}
+
+/** 全站聲音開關（音效 + 背景音樂），設定會記住 */
+function SoundToggle() {
+  const { muted } = useAudioSettings();
+  return (
+    <button
+      type="button"
+      onClick={() => audio.setMuted(!muted)}
+      className="px-1.5 py-0.5 border border-[#0f3a26] text-[#3a8c5e] hover:text-[#00ff88] hover:border-[#00ff88] transition"
+      title="音效與背景音樂"
+    >
+      SOUND:{muted ? "OFF" : "ON"}
+    </button>
   );
 }
 

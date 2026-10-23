@@ -9,6 +9,7 @@ import { api } from "../lib/api";
 import { ChatPanel } from "../components/crpg/ChatPanel";
 import { BindAccountModal } from "../components/crpg/BindAccountModal";
 import { RARITY_COLOR, statText } from "../lib/gear";
+import { audio, sceneTheme } from "../lib/audio";
 
 export const Route = createFileRoute("/play")({
   // ✅ 修復水合錯誤：整頁狀態來自 localStorage，伺服器端渲染一定對不上，改成只在瀏覽器渲染
@@ -347,6 +348,12 @@ function PlayPage() {
     return null;
   });
   const [log, setLog] = useState(() => saved?.log || []);
+
+  // 故事場景音樂：戰鬥中由 StoryBattleArena 換成戰鬥曲；離開頁面時停止
+  useEffect(() => {
+    if (state && !state.battle) audio.playTheme(sceneTheme(state.sceneId));
+  }, [state?.sceneId, !!state?.battle]);
+  useEffect(() => () => audio.stopMusic(), []);
   const [input, setInput] = useState("");
   const [history, setHistory] = useState([]);
   const [hi, setHi] = useState(-1);
@@ -612,6 +619,7 @@ function PlayPage() {
       setBindPrompt("想繼續冒險嗎？");
       return;
     }
+    audio.sfx("portal");
     let patch = effect ? (effect(state) || {}) : {};
     setState((s) => ({ ...s, ...patch, sceneId: id, battle: null }));
   }
@@ -672,6 +680,8 @@ function PlayPage() {
             push({ t: "battle", text: "你戰敗了……在據點恢復一半體力後重新出發。" });
           }
           for (const g of rw.gear || []) push({ t: "relic", text: `[LOOT] ${g.name}（${statText(g.stats)}）→ 輸入 shop 打開「裝備背包」穿上它！` });
+          if ((rw.gear || []).length) setTimeout(() => audio.sfx("loot"), 900);
+          if (r.levelUps > 0) setTimeout(() => audio.sfx("levelup"), 1300);
           if (r.levelUps > 0) push({ t: "system", text: `▲ LEVEL UP! → LV ${r.profile.level}（HP、MP、ATK 全面提升）` });
           setState((s) => {
             if (!s) return s;
