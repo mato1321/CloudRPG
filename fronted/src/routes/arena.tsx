@@ -19,7 +19,7 @@ export const Route = createFileRoute("/arena")({
 const FIGHTERS = [
   {
     id: "warrior_rpg",
-    name: "⚔ 戰士 WARRIOR",
+    name: "戰士 WARRIOR",
     title: "異世界鋼鐵重劍士",
     color: "#ff4d6d",
     secondary: "#ffd60a",
@@ -36,7 +36,7 @@ const FIGHTERS = [
   },
   {
     id: "mage_rpg",
-    name: "✦ 法師 MAGE",
+    name: "法師 MAGE",
     title: "異世界高魔詠唱者",
     color: "#a78bfa",
     secondary: "#00e5ff",
@@ -53,7 +53,7 @@ const FIGHTERS = [
   },
   {
     id: "priest_rpg",
-    name: "✚ 牧師 PRIEST",
+    name: "牧師 PRIEST",
     title: "異世界神諭聖職者",
     color: "#ffd60a",
     secondary: "#00ff88",
@@ -70,7 +70,7 @@ const FIGHTERS = [
   },
   {
     id: "ryu",
-    name: "🥊 RYU-X · 龍",
+    name: "RYU-X · 龍",
     title: "孤高格鬥武神",
     color: "#00e5ff",
     secondary: "#ffffff",
@@ -87,7 +87,7 @@ const FIGHTERS = [
   },
   {
     id: "ken",
-    name: "🔥 KEN-BLAZE · 凱",
+    name: "KEN-BLAZE · 凱",
     title: "烈焰紅蓮狂龍",
     color: "#f97316",
     secondary: "#ffd60a",
@@ -104,7 +104,7 @@ const FIGHTERS = [
   },
   {
     id: "chun",
-    name: "⚡ CHUN-CYBER · 春麗",
+    name: "CHUN-CYBER · 春麗",
     title: "電光神速腿",
     color: "#00ff88",
     secondary: "#00e5ff",
@@ -121,7 +121,7 @@ const FIGHTERS = [
   },
   {
     id: "duke_boss",
-    name: "🩸 羅劫公爵 DUKE",
+    name: "羅劫公爵 DUKE",
     title: "深紅煉獄領主 (BOSS)",
     color: "#e11d48",
     secondary: "#fde047",
@@ -138,7 +138,7 @@ const FIGHTERS = [
   },
   {
     id: "admin_boss",
-    name: "💻 ADMINISTRATOR",
+    name: "ADMINISTRATOR",
     title: "系統最高權限 AI (BOSS)",
     color: "#10b981",
     secondary: "#ff4d6d",
@@ -376,7 +376,7 @@ function ArenaPage() {
       p2: createFighterEntity(f2, 700, -1, customMode === "cpu", diffObj),
     };
     setMatchStateText(
-      `🥊 [${customMode === "pvp" ? "雙人同鍵盤對戰" : "單人 VS 電腦"}] ${f1.name} VS ${f2.name}`
+      `[${customMode === "pvp" ? "雙人同鍵盤對戰" : "單人 VS 電腦"}] ${f1.name} VS ${f2.name}`
     );
   }
 
@@ -497,7 +497,7 @@ function ArenaPage() {
 
       if (kind === "super") {
         if (attacker.energy < 100) {
-          addFloatingText(g, attacker.x, attacker.y - 102, `⚡ 氣條未滿 (${Math.floor(attacker.energy)}/100%)`, "#00e5ff", 24);
+          addFloatingText(g, attacker.x, attacker.y - 102, `氣條未滿 (${Math.floor(attacker.energy)}/100%)`, "#00e5ff", 24);
           return;
         } else {
           attacker.energy = 0;
@@ -506,7 +506,7 @@ function ArenaPage() {
           attacker.invincibleTimer = 28;
           sfx.play("super");
           spawnParticles(g, attacker.x, attacker.y - 55, attacker.cfg.color, 26, 7);
-          addFloatingText(g, attacker.x, attacker.y - 115, `★ ${attacker.cfg.superName} ★`, "#ffd60a", 38);
+          addFloatingText(g, attacker.x, attacker.y - 115, attacker.cfg.superName, "#ffd60a", 38);
         }
       }
 
@@ -988,7 +988,7 @@ function ArenaPage() {
             g.winner = matchWinner;
             g.bannerText = `${winSide} · ${matchWinner.cfg.name} WINS!`;
             g.subBannerText = "按 [SPACE] 再戰一場，或於上方自由切換角色！";
-            setMatchStateText(`🏆 勝負揭曉：${winSide} (${matchWinner.cfg.name}) 獲勝！`);
+            setMatchStateText(`勝負揭曉：${winSide} (${matchWinner.cfg.name}) 獲勝！`);
           } else {
             g.round += 1;
             resetRound(g);
@@ -1148,8 +1148,8 @@ function ArenaPage() {
       FX.drawBar(ctx, p2X, topY, barW, barH, g.p2.hp / g.p2.hpMax, g.p2.trailHp / g.p2.hpMax, "right", "#7de8ff", "#0891b2", frame);
       FX.drawTimer(ctx, W, topY, g.timer);
 
-      FX.outlinedText(ctx, `👈 1P: ${g.p1.cfg.name}`, p1X, topY + barH + 18, 13, "#7dffb6", "#000", "left", 3);
-      FX.outlinedText(ctx, `${g.mode === "cpu" ? "🤖 CPU" : "2P 👉"}: ${g.p2.cfg.name}`, p2X + barW, topY + barH + 18, 13, "#7de8ff", "#000", "right", 3);
+      FX.outlinedText(ctx, `1P: ${g.p1.cfg.name}`, p1X, topY + barH + 18, 13, "#7dffb6", "#000", "left", 3);
+      FX.outlinedText(ctx, `${g.mode === "cpu" ? "CPU" : "2P"}: ${g.p2.cfg.name}`, p2X + barW, topY + barH + 18, 13, "#7de8ff", "#000", "right", 3);
       FX.outlinedText(ctx, "★".repeat(g.p1Wins) + "☆".repeat(Math.max(0, 2 - g.p1Wins)), p1X + barW - 4, topY + barH + 18, 15, "#ffd60a", "#000", "right", 3);
       FX.outlinedText(ctx, "★".repeat(g.p2Wins) + "☆".repeat(Math.max(0, 2 - g.p2Wins)), p2X + 4, topY + barH + 18, 15, "#ffd60a", "#000", "left", 3);
 
@@ -1162,7 +1162,7 @@ function ArenaPage() {
       FX.drawMeter(ctx, W - 40 - meterW, meterY, meterW, 12, g.p2.energy, "right", frame);
       FX.outlinedText(
         ctx,
-        g.p1.energy >= 100 ? "⚡ 1P SUPER MAX! 按 [Q] 施放超必殺技！" : `1P SUPER ${Math.floor(g.p1.energy)}%`,
+        g.p1.energy >= 100 ? "1P SUPER MAX! 按 [Q] 施放超必殺技！" : `1P SUPER ${Math.floor(g.p1.energy)}%`,
         40,
         meterY - 5,
         11,
@@ -1175,8 +1175,8 @@ function ArenaPage() {
         ctx,
         g.p2.energy >= 100
           ? g.mode === "pvp"
-            ? "⚡ 2P SUPER MAX! 按 [I] 或 [Numpad 5] 施放！"
-            : "⚡ CPU SUPER MAX!"
+            ? "2P SUPER MAX! 按 [I] 或 [Numpad 5] 施放！"
+            : "CPU SUPER MAX!"
           : `${g.mode === "cpu" ? "CPU" : "2P"} SUPER ${Math.floor(g.p2.energy)}%`,
         W - 40,
         meterY - 5,
@@ -1216,7 +1216,7 @@ function ArenaPage() {
         <div className="crpg-panel p-3 flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[#ffd60a] crpg-glow-yellow font-bold text-sm mr-2">
-              🥊 ARENA 自由對戰模式 // FREE VERSUS
+              ARENA 自由對戰模式 // FREE VERSUS
             </span>
             <button
               onClick={() => setMode("pvp")}
@@ -1283,7 +1283,7 @@ function ArenaPage() {
 
         {/* Left 1P & Right 2P / CPU Character Pickers */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 text-xs">
-          <Panel title="👈 選擇 1P 角色 (左半邊鍵盤：WASD 移動 + F / G / R / T / Y / Q 出招)">
+          <Panel title="選擇 1P 角色 (左半邊鍵盤：WASD 移動 + F / G / R / T / Y / Q 出招)">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {FIGHTERS.map((f) => (
                 <button
@@ -1308,8 +1308,8 @@ function ArenaPage() {
           <Panel
             title={
               mode === "pvp"
-                ? "👉 選擇 2P 角色 (右半邊鍵盤：方向鍵 ↑←↓→ 移動 + J/K/L/U/O/I 或 數字鍵 Numpad 1~6 出招)"
-                : "🤖 選擇 CPU 電腦對手角色 (自由選擇任何格鬥家或故事 BOSS 對戰)"
+                ? "選擇 2P 角色 (右半邊鍵盤：方向鍵 ↑←↓→ 移動 + J/K/L/U/O/I 或 數字鍵 Numpad 1~6 出招)"
+                : "選擇 CPU 電腦對手角色 (自由選擇任何格鬥家或故事 BOSS 對戰)"
             }
           >
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -1365,7 +1365,7 @@ function ArenaPage() {
 
         {/* Split Left / Right Keyboard Controls Cheat Sheet */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-          <Panel title="👈 左半邊鍵盤：1P 專屬操作區 (PLAYER 1 — LEFT KEYBOARD)">
+          <Panel title="左半邊鍵盤：1P 專屬操作區 (PLAYER 1 — LEFT KEYBOARD)">
             <div className="grid grid-cols-2 gap-2 text-[#cfeedd]">
               <div>
                 <span className="text-[#00ff88] font-bold">[W / A / S / D]</span>：跳躍 / 左右移動 / 蹲下格擋
@@ -1386,12 +1386,12 @@ function ArenaPage() {
                 <span className="text-[#a78bfa] font-bold">[Y] 技能 3 (突進技)</span>：高速霸體突進攻擊
               </div>
               <div className="col-span-2">
-                <span className="text-[#ff4d6d] font-bold">[Q] ★ 超必殺技 (SUPER)</span>：氣條 100% 時施放三連毀滅超必殺！（單人打電腦時亦相容 J/K/L/U/O/I）
+                <span className="text-[#ff4d6d] font-bold">[Q] 超必殺技 (SUPER)</span>：氣條 100% 時施放三連毀滅超必殺！（單人打電腦時亦相容 J/K/L/U/O/I）
               </div>
             </div>
           </Panel>
 
-          <Panel title="👉 右半邊鍵盤：2P 專屬操作區 (PLAYER 2 — RIGHT KEYBOARD)">
+          <Panel title="右半邊鍵盤：2P 專屬操作區 (PLAYER 2 — RIGHT KEYBOARD)">
             <div className="grid grid-cols-2 gap-2 text-[#cfeedd]">
               <div>
                 <span className="text-[#00e5ff] font-bold">[↑ / ← / ↓ / →]</span>：跳躍 / 左右移動 / 蹲下格擋
@@ -1412,7 +1412,7 @@ function ArenaPage() {
                 <span className="text-[#a78bfa] font-bold">[O] 或 [Numpad 6]</span>：技能 3（高速霸體突進）
               </div>
               <div className="col-span-2">
-                <span className="text-[#ff4d6d] font-bold">[I] 或 [Numpad 5]</span>：★ 超必殺技（100% 氣條施放 — 完全獨立於鍵盤右半區，雙人絕不撞手！）
+                <span className="text-[#ff4d6d] font-bold">[I] 或 [Numpad 5]</span>：超必殺技（100% 氣條施放 — 完全獨立於鍵盤右半區，雙人絕不撞手！）
               </div>
             </div>
           </Panel>

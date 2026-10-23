@@ -77,7 +77,7 @@ export function ShopModal({ state, isAdmin, online, initialTab = "shop", onClose
             <span className="text-[#3a8c5e]">
               裝備中{" "}
               <span className="text-[#00e5ff] crpg-glow-cyan">
-                ⚔ {weaponName}
+                {weaponName}
                 {lo.plus > 0 && lo.tier < 3 ? ` +${lo.plus}` : ""}
               </span>
             </span>
@@ -89,7 +89,7 @@ export function ShopModal({ state, isAdmin, online, initialTab = "shop", onClose
 
         {!online ? (
           <div className="p-6 space-y-3 text-sm">
-            <div className="text-[#ffd60a] crpg-glow-yellow text-lg">🔒 黑市需要帳號</div>
+            <div className="text-[#ffd60a] crpg-glow-yellow text-lg">黑市需要帳號</div>
             <p className="text-[#7be0a8] text-[13px] leading-relaxed">
               金幣、物品與裝備都由雲端伺服器保管（防止修改存檔作弊），所以訪客還不能交易。綁定帳號後，目前的訪客進度會一起保存。
             </p>
@@ -128,7 +128,7 @@ export function ShopModal({ state, isAdmin, online, initialTab = "shop", onClose
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className={`text-[13px] font-bold ${RARITY[it.rarity]}`}>
-                          {it.isSkillBook ? "📘 " : it.classOnly ? "⚔ " : ""}
+                          
                           {it.name}
                         </span>
                         <span className="text-[#ffd60a] crpg-glow-yellow text-xs font-bold">{st.price.toLocaleString()}G</span>
@@ -157,7 +157,7 @@ export function ShopModal({ state, isAdmin, online, initialTab = "shop", onClose
         )}
 
         <div className="px-4 py-1.5 border-t border-[#0f3a26] text-[10px] text-[#3a8c5e]">
-          {state.battle ? "⏸ 戰鬥已暫停 · " : ""}購買後技能與武器外觀在戰鬥中立即生效 · 轉職請到 [MARKET] 頁面
+          {state.battle ? "戰鬥已暫停 · " : ""}購買後技能與武器外觀在戰鬥中立即生效 · 轉職請到 [MARKET] 頁面
         </div>
       </div>
     </div>

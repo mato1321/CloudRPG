@@ -98,13 +98,13 @@ function GuildPage() {
               </div>
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-              <Panel title="🐉 每週公會 Boss" className="lg:col-span-2">
+              <Panel title="每週公會 Boss" className="lg:col-span-2">
                 <div className="space-y-3">
                   <div className="text-lg text-[#ff7a90] font-bold">{mine.boss.name}</div>
                   <HpBar label="公會共享血量（每週一刷新）" value={mine.boss.hp} max={mine.boss.hpMax} color="#ff4d6d" />
                   <div className="flex flex-wrap gap-2 items-center">
                     {mine.boss.defeated ? (
-                      <span className="text-[#00ff88]">✓ 本週已討伐成功！</span>
+                      <span className="text-[#00ff88]">本週已討伐成功！</span>
                     ) : (
                       <button onClick={() => setFighting(true)} className="crpg-panel px-5 py-2 text-[#ff4d6d] crpg-glow-red border-[#ff4d6d]/60 font-bold">
                         [ 出戰（45 秒） ]
@@ -132,7 +132,7 @@ function GuildPage() {
                       {mine.members.map((m) => (
                         <tr key={m.username} className="border-t border-[#0f3a26] text-[#cfeedd]">
                           <td className="py-1">
-                            {m.role === "leader" ? "👑 " : ""}
+                            
                             {m.username}
                           </td>
                           <td className={CLASSES[m.klass]?.color}>{CLASSES[m.klass]?.name || "-"}</td>

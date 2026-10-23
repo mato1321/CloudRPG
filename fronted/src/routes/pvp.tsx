@@ -77,13 +77,13 @@ function PvpPage() {
                   <div key={o.ref} className="border border-[#0f3a26] p-3 space-y-1 hover:border-[#00e5ff]/60">
                     <div className="flex justify-between">
                       <span className="text-[#cfeedd] font-bold">
-                        {o.bot ? "🤖 " : "👤 "}
+                        
                         {o.name}
                       </span>
                       <span className="text-[#00e5ff]">{o.rating}</span>
                     </div>
                     <div className={`text-[12px] ${c?.color || ""}`}>
-                      {c?.icon} {c?.name} · Lv.{o.level} · ATK {o.atk} · HP {o.hpMax}
+                      {c?.name} · Lv.{o.level} · ATK {o.atk} · HP {o.hpMax}
                     </div>
                     <button onClick={() => setTarget(o)} className="mt-1 px-3 py-1 border border-[#00e5ff] text-[#00e5ff] text-xs hover:crpg-glow-cyan">
                       [ 挑戰 ]
@@ -96,7 +96,7 @@ function PvpPage() {
               [ ↻ 換一批對手 ]
             </button>
           </Panel>
-          <Panel title="🏆 積分排行">
+          <Panel title="積分排行">
             <RankTable rows={board} valueLabel="積分" highlight={me} />
           </Panel>
         </div>

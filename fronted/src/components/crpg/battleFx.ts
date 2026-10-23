@@ -2801,7 +2801,7 @@ export function drawHazard(ctx: CanvasRenderingContext2D, hz: any, frame: number
         ctx.textAlign = "center";
         ctx.fillText(hz.dir > 0 ? "▶▶" : "◀◀", edge + hz.dir * 20, FLOOR - 50);
         ctx.globalAlpha = 1;
-        label("👥 分身突進！跳起來閃避", FLOOR - 120);
+        label("分身突進！跳起來閃避", FLOOR - 120);
       } else if (act && hz.snap) {
         ctx.save();
         ctx.globalCompositeOperation = "lighter";
@@ -3157,7 +3157,7 @@ export function drawStage(ctx: CanvasRenderingContext2D, key: string, frame: num
           ctx.font = "bold 14px monospace";
           ctx.textAlign = "center";
           ctx.fillStyle = "rgba(255,77,109,0.75)";
-          ctx.fillText("⚠ SYSTEM OVERCLOCK // KERNEL PANIC ⚠", W / 2, 84);
+          ctx.fillText("SYSTEM OVERCLOCK // KERNEL PANIC", W / 2, 84);
         }
       }
       break;
@@ -3772,7 +3772,7 @@ export function drawCutIn(ctx, g, W, H, frame) {
   ctx.strokeStyle = "#ffffff";
   ctx.lineWidth = 3;
   ctx.stroke();
-  outlinedText(ctx, c.name ? `★ ${c.name} ★` : "★ SUPER ★", left ? W * 0.62 : W * 0.38, bandY + bandH / 2 + 12, 30, "#ffffff", "#000", "center", 7);
+  outlinedText(ctx, c.name ? c.name : "SUPER", left ? W * 0.62 : W * 0.38, bandY + bandH / 2 + 12, 30, "#ffffff", "#000", "center", 7);
   outlinedText(ctx, "SUPER ART", left ? W * 0.62 : W * 0.38, bandY + bandH / 2 - 26, 13, "#ffd60a", "#000", "center", 4);
   ctx.restore();
 }

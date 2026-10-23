@@ -23,7 +23,7 @@ export const CLASS_META: Record<string, any> = {
     id: "warrior",
     name: "戰士",
     en: "Warrior",
-    icon: "⚔",
+    icon: "",
     color: "text-[#ff4d6d] crpg-glow-red",
     border: "border-[#ff4d6d]",
     stats: { hp: 220, mp: 60, atk: 25 },
@@ -41,7 +41,7 @@ export const CLASS_META: Record<string, any> = {
     id: "mage",
     name: "法師",
     en: "Mage",
-    icon: "✦",
+    icon: "",
     color: "text-[#a78bfa] crpg-glow-cyan",
     border: "border-[#a78bfa]",
     stats: { hp: 120, mp: 220, atk: 15 },
@@ -59,7 +59,7 @@ export const CLASS_META: Record<string, any> = {
     id: "priest",
     name: "牧師",
     en: "Priest",
-    icon: "✚",
+    icon: "",
     color: "text-[#ffd60a] crpg-glow-yellow",
     border: "border-[#ffd60a]",
     stats: { hp: 160, mp: 180, atk: 12 },
@@ -124,7 +124,7 @@ export function buildShop(klass: string) {
       id: "skillbook",
       name: "終極奧義技能書",
       desc: "封印著職業最強毀滅奧義的禁忌書頁（解鎖鍵盤 [Q / I] 100% 氣條超必殺技）。",
-      effect: meta ? `習得奧義「★ ${meta.ult}」` : "依職業解鎖終極超必殺技 [Q/I]",
+      effect: meta ? `習得奧義「${meta.ult}」` : "依職業解鎖終極超必殺技 [Q/I]",
       price: 2000,
       rarity: "legend",
       isSkillBook: true,
@@ -219,33 +219,33 @@ export function itemStatus(it: any, state: any, isAdmin = false) {
       (it.id === "skillbook_1" && state?.learnedSkill2) ||
       (it.id === "skillbook_2" && state?.learnedSkill3) ||
       (it.id === "skillbook" && state?.learnedUlt);
-    badge = learned ? "✅ 已習得" : "🔒 未習得";
+    badge = learned ? "已習得" : "未習得";
     if (learned) {
       blocked = "你已經習得這個技能了。";
-      label = "LEARNED ✓";
+      label = "LEARNED";
     }
   } else if (it.id === "weapon_basic" || it.id === "weapon_adv") {
     const plus = owned - 1;
     if (it.id === "weapon_basic" && (inv.weapon_adv || 0) > 0) {
       blocked = "已裝備高級武器，初級武器不再需要。";
       label = "已被高級武器取代";
-      badge = owned > 0 ? "📦 已收藏（高級武器裝備中）" : "高級武器裝備中";
+      badge = owned > 0 ? "已收藏（高級武器裝備中）" : "高級武器裝備中";
     } else if (owned >= 1 + MAX_PLUS) {
       blocked = `已強化至 +${MAX_PLUS} 上限。`;
       label = `MAX +${MAX_PLUS}`;
-      badge = `✅ 已裝備 +${MAX_PLUS}（最高強化）`;
+      badge = `已裝備 +${MAX_PLUS}（最高強化）`;
     } else if (owned > 0) {
       price = upgradeCost(it, plus + 1);
       label = `升階強化 → +${plus + 1}`;
-      badge = `✅ 已裝備${plus > 0 ? ` +${plus}` : ""}`;
+      badge = `已裝備${plus > 0 ? ` +${plus}` : ""}`;
     } else {
       badge = "尚未裝備";
     }
   } else if (it.id === "terminus") {
-    badge = owned > 0 ? "✅ 已裝備（未知權限已解鎖）" : "？？？";
+    badge = owned > 0 ? "已裝備（未知權限已解鎖）" : "？？？";
     if (owned > 0) {
       blocked = "已經裝備了。";
-      label = "已裝備 ✓";
+      label = "已裝備";
     }
   }
 
@@ -269,15 +269,15 @@ export function applyPurchase(state: any, it: any, isAdmin = false) {
   if (it.id === "skillbook_1") {
     s.learnedSkill2 = true;
     s.inv.skillbook_1 = 1;
-    msg = `✨ 已習得第 2 技能 [T/U]：${meta.skill2}！`;
+    msg = `已習得第 2 技能 [T/U]：${meta.skill2}！`;
   } else if (it.id === "skillbook_2") {
     s.learnedSkill3 = true;
     s.inv.skillbook_2 = 1;
-    msg = `✨ 已習得第 3 技能 [Y/O]：${meta.skill3}！`;
+    msg = `已習得第 3 技能 [Y/O]：${meta.skill3}！`;
   } else if (it.id === "skillbook") {
     s.learnedUlt = true;
     s.inv.skillbook = 1;
-    msg = `★ 已習得終極奧義 [Q/I]：${meta.ult}！`;
+    msg = `已習得終極奧義 [Q/I]：${meta.ult}！`;
   } else if (it.id === "weapon_basic" || it.id === "weapon_adv") {
     const owned = s.inv[it.id] || 0;
     const gain = owned === 0 ? WEAPON_ATK[it.id].base : WEAPON_ATK[it.id].per;
@@ -285,8 +285,8 @@ export function applyPurchase(state: any, it: any, isAdmin = false) {
     s.atk = (s.atk || 0) + gain;
     msg =
       owned === 0
-        ? `⚔ 已裝備「${it.name}」ATK +${gain}！格鬥中的武器外觀已進化。`
-        : `⚔「${it.name}」升階強化至 +${owned}，ATK +${gain}，武器光效增強！`;
+        ? `已裝備「${it.name}」ATK +${gain}！格鬥中的武器外觀已進化。`
+        : `「${it.name}」升階強化至 +${owned}，ATK +${gain}，武器光效增強！`;
   } else if (it.id === "terminus") {
     s.inv.terminus = 1;
     s.atk = (s.atk || 0) + 9999;

@@ -113,7 +113,7 @@ export function BattleResult({ result, pending, onContinue }) {
   return (
     <div className="crpg-panel p-6 space-y-3">
       <div className={`text-3xl font-bold tracking-widest ${result.win ? "text-[#ffd60a] crpg-glow-yellow" : "text-[#ff4d6d] crpg-glow-red"}`}>
-        {x.raid ? "⚔ 戰鬥結束" : result.win ? "🏆 VICTORY" : "💀 DEFEATED"}
+        {x.raid ? "戰鬥結束" : result.win ? "VICTORY" : "DEFEATED"}
       </div>
       <div className="text-sm text-[#cfeedd] space-y-1">
         {x.raid && (
@@ -121,7 +121,7 @@ export function BattleResult({ result, pending, onContinue }) {
             對 <span className="text-[#ff7a90]">{x.raid.name}</span> 造成{" "}
             <span className="text-[#ffd60a] font-bold">{x.raid.dealt.toLocaleString()}</span> 傷害
             {x.raid.capped && <span className="text-[#ff4d6d]">（超過理論上限，已校正）</span>}
-            {x.raid.killed && <div className="text-[#00ff88] font-bold">★ 你打出了最後一擊！Boss 倒下了！</div>}
+            {x.raid.killed && <div className="text-[#00ff88] font-bold">你打出了最後一擊！Boss 倒下了！</div>}
             <div className="text-[#3a8c5e] text-xs">剩餘全服血量 {x.raid.hp.toLocaleString()} / {x.raid.hpMax.toLocaleString()}</div>
           </div>
         )}
@@ -133,7 +133,7 @@ export function BattleResult({ result, pending, onContinue }) {
         {x.daily && (
           <div>
             本次分數 <span className="text-[#ffd60a] font-bold">{x.daily.score.toLocaleString()}</span>
-            {x.daily.newBest && <span className="text-[#00ff88]"> ★ 新紀錄！</span>} · 今日最佳 {x.daily.best.toLocaleString()}
+            {x.daily.newBest && <span className="text-[#00ff88]"> 新紀錄！</span>} · 今日最佳 {x.daily.best.toLocaleString()}
           </div>
         )}
         {x.pvp && (
@@ -148,7 +148,7 @@ export function BattleResult({ result, pending, onContinue }) {
         </div>
         {(r.gear || []).map((g) => (
           <div key={g.id} className="border px-2 py-1 text-xs" style={{ borderColor: RARITY_COLOR[g.rarity] }}>
-            <span style={{ color: RARITY_COLOR[g.rarity] }} className="font-bold">🎁 {g.name}</span> <span className="text-[#cfeedd]">{statText(g.stats)}</span>
+            <span style={{ color: RARITY_COLOR[g.rarity] }} className="font-bold">{g.name}</span> <span className="text-[#cfeedd]">{statText(g.stats)}</span>
           </div>
         ))}
         {r.salvageGold > 0 && <div className="text-xs text-[#3a8c5e]">背包已滿，自動分解獲得 {r.salvageGold}G</div>}

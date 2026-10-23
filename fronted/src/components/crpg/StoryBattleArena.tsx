@@ -674,7 +674,7 @@ export function StoryBattleArena({
     function triggerPartyAssist() {
       if (g.assistCooldown > 0) {
         const secLeft = Math.ceil((g.assistCooldown * 21) / 1000);
-        addFloatingText(g.p1.x, g.p1.y - 108, `⏳ 隊友支援冷卻中 (${secLeft}s)`, "#3a8c5e", 24);
+        addFloatingText(g.p1.x, g.p1.y - 108, `隊友支援冷卻中 (${secLeft}s)`, "#3a8c5e", 24);
         return;
       }
       const partyList = stateRef.current?.party || [];
@@ -696,7 +696,7 @@ export function StoryBattleArena({
         timer: 42,
         hasFired: false,
       };
-      addFloatingText(startX, FLOOR_Y - 135, `🤝 ${ally.name} 參戰支援！`, "#00e5ff", 40);
+      addFloatingText(startX, FLOOR_Y - 135, `${ally.name} 參戰支援！`, "#00e5ff", 40);
       spawnParticles(startX, FLOOR_Y - 60, "#00e5ff", 18, 6);
     }
 
@@ -746,17 +746,17 @@ export function StoryBattleArena({
       }
 
       if (kind === "skill2" && !curState.learnedSkill2) {
-        addFloatingText(attacker.x, attacker.y - 105, "🔒 需於黑市購買「進階技能書・卷一」", "#ffd60a", 38);
+        addFloatingText(attacker.x, attacker.y - 105, "需於黑市購買「進階技能書・卷一」", "#ffd60a", 38);
         storySfx.play("block");
         return;
       }
       if (kind === "skill3" && !curState.learnedSkill3) {
-        addFloatingText(attacker.x, attacker.y - 105, "🔒 需於黑市購買「進階技能書・卷二」", "#ffd60a", 38);
+        addFloatingText(attacker.x, attacker.y - 105, "需於黑市購買「進階技能書・卷二」", "#ffd60a", 38);
         storySfx.play("block");
         return;
       }
       if (kind === "ult" && !curState.learnedUlt) {
-        addFloatingText(attacker.x, attacker.y - 105, "🔒 需於黑市購買「終極奧義技能書」", "#ff4d6d", 38);
+        addFloatingText(attacker.x, attacker.y - 105, "需於黑市購買「終極奧義技能書」", "#ff4d6d", 38);
         storySfx.play("block");
         return;
       }
@@ -806,7 +806,7 @@ export function StoryBattleArena({
         attacker.invincibleTimer = 30;
         storySfx.play("super");
         spawnParticles(attacker.x, attacker.y - 55, attacker.cfg.color, 26, 7);
-        addFloatingText(attacker.x, attacker.y - 115, `★ ${ultSkill.name} ★`, "#ffd60a", 42);
+        addFloatingText(attacker.x, attacker.y - 115, ultSkill.name, "#ffd60a", 42);
       }
 
       attacker.state = "attack";
@@ -915,7 +915,7 @@ export function StoryBattleArena({
         attacker.invincibleTimer = 22;
         storySfx.play("super");
         spawnParticles(attacker.x, attacker.y - 55, attacker.cfg.color, 24, 6);
-        addFloatingText(attacker.x, attacker.y - 115, `★ ${attacker.cfg.superName} ★`, "#ff4d6d", 38);
+        addFloatingText(attacker.x, attacker.y - 115, attacker.cfg.superName, "#ff4d6d", 38);
       }
 
       attacker.state = "attack";
@@ -1097,7 +1097,7 @@ export function StoryBattleArena({
         g.hitFlash = 8;
         g.overclockTimer = 90;
         storySfx.play("super");
-        addFloatingText(ai.x, ai.y - 125, "⚠️ SYSTEM OVERCLOCK // 系統強制超頻！", "#ff4d6d", 60);
+        addFloatingText(ai.x, ai.y - 125, "SYSTEM OVERCLOCK // 系統強制超頻！", "#ff4d6d", 60);
         FX.emit(g, "code", ai.x, ai.y - 60, 40, { color: "#ff4d6d", speed: 6, life: 40 });
         FX.addFx(g, { type: "ring", x: ai.x, y: ai.y - 60, r0: 10, r1: 320, color: "#ff4d6d", life: 34, lw: 10 });
         ai.cfg.speed = 5.2;
@@ -1116,20 +1116,20 @@ export function StoryBattleArena({
           if (ai.hazardCycle % 2 === 1) {
             const xs = half ? [tx, tx - 120, tx + 120] : [tx];
             xs.forEach((x, i) =>
-              g.hazards.push({ type: "ice_spike", x: cx(x), width: 60, warnTimer: 38 + i * 12, activeTimer: 24, activeMax: 24, damage: 24, hasHit: false, color: "#a5f3fc", label: "❄️ 深淵冰刺" })
+              g.hazards.push({ type: "ice_spike", x: cx(x), width: 60, warnTimer: 38 + i * 12, activeTimer: 24, activeMax: 24, damage: 24, hasHit: false, color: "#a5f3fc", label: "深淵冰刺" })
             );
           } else {
             const dur = half ? 260 : 200;
-            g.hazards.push({ type: "black_water", x: tx, width: 110, warnTimer: 34, warnMax: 34, activeTimer: dur, activeMax: dur, damage: 6, hasHit: false, color: "#22d3ee", label: "☠ 黑水陷阱 · 減速" });
+            g.hazards.push({ type: "black_water", x: tx, width: 110, warnTimer: 34, warnMax: 34, activeTimer: dur, activeMax: dur, damage: 6, hasHit: false, color: "#22d3ee", label: "黑水陷阱 · 減速" });
           }
         } else if (enemyKey === "skyisle") {
           ai.hazardCooldown = half ? 150 : 205;
           const xs = half ? [tx, tx - 150, tx + 150] : [tx];
           xs.forEach((x, i) =>
-            g.hazards.push({ type: "sky_lightning", x: cx(x), width: 64, warnTimer: 42 + i * 14, warnMax: 42 + i * 14, activeTimer: 18, activeMax: 18, damage: 28, hasHit: false, seed: Math.random() * 100, color: "#fde047", label: "⚡ 天罰落雷" })
+            g.hazards.push({ type: "sky_lightning", x: cx(x), width: 64, warnTimer: 42 + i * 14, warnMax: 42 + i * 14, activeTimer: 18, activeMax: 18, damage: 28, hasHit: false, seed: Math.random() * 100, color: "#fde047", label: "天罰落雷" })
           );
         } else if (enemyKey === "admin") {
-          const beam = (x: number) => ({ type: "format_beam", x, width: 68, warnTimer: 35, activeTimer: 24, damage: 32, hasHit: false, color: "#ff4d6d", label: "💻 rm -rf 格式化光束" });
+          const beam = (x: number) => ({ type: "format_beam", x, width: 68, warnTimer: 35, activeTimer: 24, damage: 32, hasHit: false, color: "#ff4d6d", label: "rm -rf 格式化光束" });
           if (!ai.phase2Triggered) {
             ai.hazardCooldown = 210;
             g.hazards.push(beam(tx));
@@ -1295,7 +1295,7 @@ export function StoryBattleArena({
         g.superFlash = 20;
         storySfx.play("super");
         spawnParticles(defender.x, defender.y - 50, "#a78bfa", 30, 7);
-        addFloatingText(defender.x, defender.y - 115, "★ 不死圖騰發動！復活 60% HP ★", "#a78bfa", 45);
+        addFloatingText(defender.x, defender.y - 115, "不死圖騰發動！復活 60% HP", "#a78bfa", 45);
         g.stats.items.totem++;
         callbacksRef.current.onUseTotem?.(reviveHp);
         return;
@@ -1495,10 +1495,10 @@ export function StoryBattleArena({
         const f = g.frameCounter;
         if (g.mods.has("regen") && f % 48 === 0 && g.p2.hp > 0) g.p2.hp = Math.min(g.p2.hpMax, g.p2.hp + Math.ceil(g.p2.hpMax * 0.006));
         if (g.mods.has("blackwater") && f % 330 === 100 && !g.hazards.some((h: any) => h.type === "black_water")) {
-          g.hazards.push({ type: "black_water", x: Math.max(70, Math.min(830, g.p1.x)), width: 100, warnTimer: 34, warnMax: 34, activeTimer: 200, activeMax: 200, damage: 5, hasHit: false, color: "#22d3ee", label: "☠ 黑水陷阱 · 減速" });
+          g.hazards.push({ type: "black_water", x: Math.max(70, Math.min(830, g.p1.x)), width: 100, warnTimer: 34, warnMax: 34, activeTimer: 200, activeMax: 200, damage: 5, hasHit: false, color: "#22d3ee", label: "黑水陷阱 · 減速" });
         }
         if (g.mods.has("thunder") && f % 260 === 60) {
-          g.hazards.push({ type: "sky_lightning", x: Math.max(70, Math.min(830, g.p1.x)), width: 64, warnTimer: 44, warnMax: 44, activeTimer: 18, activeMax: 18, damage: 22, hasHit: false, seed: Math.random() * 100, color: "#fde047", label: "⚡ 雷暴" });
+          g.hazards.push({ type: "sky_lightning", x: Math.max(70, Math.min(830, g.p1.x)), width: 64, warnTimer: 44, warnMax: 44, activeTimer: 18, activeMax: 18, damage: 22, hasHit: false, seed: Math.random() * 100, color: "#fde047", label: "雷暴" });
         }
         if (g.mods.has("clone") && f % 300 === 150) {
           const dir = g.p1.x > 450 ? 1 : -1; // 從玩家背後的另一端衝過來
@@ -1514,7 +1514,7 @@ export function StoryBattleArena({
           tut.step++;
           tut.flash = 28;
           storySfx.play("assist");
-          addFloatingText(g.p1.x, g.p1.y - 120, tut.step < tut.steps.length ? "✓ 很好！" : "✓ 教學完成！打倒雜魚老大吧！", "#00ff88", 40);
+          addFloatingText(g.p1.x, g.p1.y - 120, tut.step < tut.steps.length ? "很好！" : "教學完成！打倒雜魚老大吧！", "#00ff88", 40);
         }
       }
 
@@ -1549,7 +1549,7 @@ export function StoryBattleArena({
             const healAmt = 35;
             g.p1.hp = Math.min(g.p1.hpMax, g.p1.hp + healAmt);
             storySfx.play("heal");
-            addFloatingText(g.p1.x, g.p1.y - 115, `✚ ${as.name} 聖光祈禱 +${healAmt} HP!`, "#ffd60a", 36);
+            addFloatingText(g.p1.x, g.p1.y - 115, `${as.name} 聖光祈禱 +${healAmt} HP!`, "#ffd60a", 36);
             spawnParticles(g.p1.x, g.p1.y - 45, "#ffd60a", 18, 5);
           }
           const projColor = as.klass === "mage" ? "#a78bfa" : as.klass === "priest" ? "#ffd60a" : "#ff4d6d";
@@ -1739,7 +1739,7 @@ export function StoryBattleArena({
           frame,
           { portrait: true }
         );
-        FX.outlinedText(ctx, `🤝 ${as.name}`, as.x, as.y - 128, 11, "#00e5ff", "#000", "center", 3);
+        FX.outlinedText(ctx, `${as.name}`, as.x, as.y - 128, 11, "#00e5ff", "#000", "center", 3);
       }
 
       // 出招的一方畫在前面
@@ -1770,12 +1770,12 @@ export function StoryBattleArena({
       drawTutorial(ctx, W);
       FX.drawCutIn(ctx, g, W, H, frame);
       if (g.overclockTimer > 0 && g.phase === "fight") {
-        FX.drawBanner(ctx, W, H, "⚠ SYSTEM OVERCLOCK", "Administrator 第二階段：全畫面雷射 · 數據方塊轟炸！", frame, 90 - g.overclockTimer);
+        FX.drawBanner(ctx, W, H, "SYSTEM OVERCLOCK", "Administrator 第二階段：全畫面雷射 · 數據方塊轟炸！", frame, 90 - g.overclockTimer);
       }
       if (pausedRef.current) {
         ctx.fillStyle = "rgba(0,0,0,0.55)";
         ctx.fillRect(0, 0, W, H);
-        FX.outlinedText(ctx, "⏸ PAUSED · 黑市交易中", W / 2, H / 2, 26, "#ffd60a", "#000", "center", 6);
+        FX.outlinedText(ctx, "PAUSED · 黑市交易中", W / 2, H / 2, 26, "#ffd60a", "#000", "center", 6);
         FX.outlinedText(ctx, "關閉黑市後繼續戰鬥", W / 2, H / 2 + 28, 13, "#7dffb6", "#000", "center", 4);
       }
     }
@@ -1833,7 +1833,7 @@ export function StoryBattleArena({
       FX.outlinedText(ctx, `${g.p1.cfg.name}  HP ${g.p1.hp}/${g.p1.hpMax}`, p1X, topY + barH + 27, 12, "#7dffb6", "#000", "left", 3);
       const look = FX.weaponLook(g.p1);
       if (g.p1.weaponTier > 0 && look) {
-        FX.outlinedText(ctx, `⚔ ${look.name}${g.p1.weaponPlus > 0 ? ` +${g.p1.weaponPlus}` : ""}`, p1X, topY + barH + 43, 11, look.glow || "#ffd60a", "#000", "left", 3);
+        FX.outlinedText(ctx, `${look.name}${g.p1.weaponPlus > 0 ? ` +${g.p1.weaponPlus}` : ""}`, p1X, topY + barH + 43, 11, look.glow || "#ffd60a", "#000", "left", 3);
       }
 
       // P2 名稱 / 稱號 / 二階段
@@ -1847,7 +1847,7 @@ export function StoryBattleArena({
       }
       FX.outlinedText(ctx, g.p2.cfg.title || "", p2X + barW, topY + barH + 33, 10, "#fda4af", "#000", "right", 3);
       if (oc && frame % 30 < 20) {
-        FX.outlinedText(ctx, "⚠ PHASE 2 · OVERCLOCK", p2X + barW, topY + barH + 49, 11, "#ff4d6d", "#000", "right", 3);
+        FX.outlinedText(ctx, "PHASE 2 · OVERCLOCK", p2X + barW, topY + barH + 49, 11, "#ff4d6d", "#000", "right", 3);
       }
 
       FX.drawTimer(ctx, W, topY, g.timer);
@@ -1863,7 +1863,7 @@ export function StoryBattleArena({
       FX.drawMeter(ctx, mX, mY, 240, 10, g.p1.energy, "left", frame);
       FX.outlinedText(
         ctx,
-        full ? "⚡ SUPER MAX! 按 [Q/I] 施放終極奧義！" : `SUPER 氣條 ${Math.floor(g.p1.energy)}%`,
+        full ? "SUPER MAX! 按 [Q/I] 施放終極奧義！" : `SUPER 氣條 ${Math.floor(g.p1.energy)}%`,
         mX,
         mY - 5,
         11,
@@ -1877,7 +1877,7 @@ export function StoryBattleArena({
       const assistReady = g.assistCooldown <= 0;
       FX.outlinedText(
         ctx,
-        assistReady ? "🤝 隊友支援 READY! 按 [E] 召喚三人組連攜攻擊" : `⏳ 隊友支援冷卻 (${Math.ceil((g.assistCooldown * 21) / 1000)}s)`,
+        assistReady ? "隊友支援 READY! 按 [E] 召喚三人組連攜攻擊" : `隊友支援冷卻 (${Math.ceil((g.assistCooldown * 21) / 1000)}s)`,
         W - 36,
         mY + 7,
         11,
@@ -1954,7 +1954,7 @@ export function StoryBattleArena({
       <div className="w-full flex flex-wrap items-center justify-between gap-2 text-xs px-1">
         <div className="flex items-center gap-2">
           <span className="px-2 py-0.5 bg-[#ff4d6d]/20 border border-[#ff4d6d] text-[#ff4d6d] font-bold">
-            🥊 STORY BATTLE ARENA
+            STORY BATTLE ARENA
           </span>
           <span className="text-[#ffd60a] font-bold">
             VS {STORY_ENEMY_PROFILES[enemyKey]?.name || enemyCfg.name}
@@ -2008,7 +2008,7 @@ export function StoryBattleArena({
             }}
             className="absolute inset-0 flex items-center justify-center bg-black/45 rounded text-[#ffd60a] crpg-glow-yellow text-sm font-bold tracking-wide"
           >
-            ⌨ 鍵盤目前在指令輸入框 — 點擊戰場或按 Esc 回到角色操控
+            鍵盤目前在指令輸入框 — 點擊戰場或按 Esc 回到角色操控
           </button>
         )}
       </div>
@@ -2016,50 +2016,50 @@ export function StoryBattleArena({
       {/* Interactive Skill & Keyboard Hotkey Bar */}
       <div className="w-full max-w-[900px] grid grid-cols-2 md:grid-cols-5 gap-1.5 text-[11px]">
         <div className="border border-[#0f3a26] bg-[#071510] px-2.5 py-1.5">
-          <div className="text-[#00ff88] font-bold">🕹️ 移動與普攻</div>
+          <div className="text-[#00ff88] font-bold">移動與普攻</div>
           <div className="text-[#cfeedd] mt-0.5">
             [W/A/S/D] 移動 · [F/J] 輕擊 · [G/K] 重擊
           </div>
         </div>
 
         <div className="border border-[#0f3a26] bg-[#071510] px-2.5 py-1.5">
-          <div className="text-[#00e5ff] font-bold">⚡ 初始與卷一技能</div>
+          <div className="text-[#00e5ff] font-bold">初始與卷一技能</div>
           <div className="text-[#cfeedd] mt-0.5">
             [R/L] {skill1.name} ·{" "}
             {state.learnedSkill2 ? (
               <span className="text-[#ffd60a]">[T/U] {skill2.name}</span>
             ) : (
-              <span className="text-[#3a8c5e]">[T/U] 🔒卷一</span>
+              <span className="text-[#3a8c5e]">[T/U] 卷一</span>
             )}
           </div>
         </div>
 
         <div className="border border-[#0f3a26] bg-[#071510] px-2.5 py-1.5">
-          <div className="text-[#a78bfa] font-bold">🔥 卷二與終極奧義</div>
+          <div className="text-[#a78bfa] font-bold">卷二與終極奧義</div>
           <div className="text-[#cfeedd] mt-0.5">
             {state.learnedSkill3 ? (
               <span className="text-[#00e5ff]">[Y/O] {skill3.name}</span>
             ) : (
-              <span className="text-[#3a8c5e]">[Y/O] 🔒卷二</span>
+              <span className="text-[#3a8c5e]">[Y/O] 卷二</span>
             )}{" "}
             ·{" "}
             {state.learnedUlt ? (
-              <span className="text-[#ff4d6d] font-bold">[Q/I] ★{ultSkill.name}</span>
+              <span className="text-[#ff4d6d] font-bold">[Q/I] {ultSkill.name}</span>
             ) : (
-              <span className="text-[#3a8c5e]">[Q/I] 🔒奧義書</span>
+              <span className="text-[#3a8c5e]">[Q/I] 奧義書</span>
             )}
           </div>
         </div>
 
         <div className="border border-[#0f3a26] bg-[#071510] px-2.5 py-1.5">
-          <div className="text-[#00ff88] font-bold">🤝 三人組連攜支援</div>
+          <div className="text-[#00ff88] font-bold">三人組連攜支援</div>
           <div className="text-[#cfeedd] mt-0.5">
             按 <span className="text-[#ffd60a] font-bold">[E]</span> 召喚 AI 隊友進場放招支援！
           </div>
         </div>
 
         <div className="border border-[#0f3a26] bg-[#071510] px-2.5 py-1.5">
-          <div className="text-[#ffd60a] font-bold">🧪 道具快捷鍵</div>
+          <div className="text-[#ffd60a] font-bold">道具快捷鍵</div>
           <div className="text-[#cfeedd] mt-0.5">
             [H] 草藥({state.inv?.herb || 0}) · [B] 魔力水({state.inv?.mana || 0})
           </div>

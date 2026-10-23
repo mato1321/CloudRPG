@@ -342,17 +342,17 @@ def buy(p: dict, item_id: str, is_admin: bool = False) -> str:
     if "learn" in it:
         p[it["learn"]] = True
         inv[item_id] = 1
-        msg = {"learnedSkill2": f"✨ 已習得第 2 技能 [T/U]：{c['skill2']}！",
-               "learnedSkill3": f"✨ 已習得第 3 技能 [Y/O]：{c['skill3']}！",
-               "learnedUlt": f"★ 已習得終極奧義 [Q/I]：{c['ult']}！"}[it["learn"]]
+        msg = {"learnedSkill2": f"已習得第 2 技能 [T/U]：{c['skill2']}！",
+               "learnedSkill3": f"已習得第 3 技能 [Y/O]：{c['skill3']}！",
+               "learnedUlt": f"已習得終極奧義 [Q/I]：{c['ult']}！"}[it["learn"]]
     elif item_id in D.WEAPON_ATK:
         owned = inv.get(item_id, 0)
         base, per = D.WEAPON_ATK[item_id]
         gain = base if owned == 0 else per
         inv[item_id] = owned + 1
         wname = c["wBasic"] if item_id == "weapon_basic" else c["wAdv"]
-        msg = (f"⚔ 已裝備「{wname}」ATK +{gain}！格鬥中的武器外觀已進化。" if owned == 0
-               else f"⚔「{wname}」升階強化至 +{owned}，ATK +{gain}，武器光效增強！")
+        msg = (f"已裝備「{wname}」ATK +{gain}！格鬥中的武器外觀已進化。" if owned == 0
+               else f"「{wname}」升階強化至 +{owned}，ATK +{gain}，武器光效增強！")
     elif item_id == "terminus":
         inv["terminus"] = 1
         msg = "[ERROR] 未知權限已解鎖……武器化為流動的程式碼。"
@@ -374,7 +374,7 @@ def transfer_class(p: dict, klass: str, is_admin: bool = False) -> str:
     if not is_admin:
         p["gold"] -= D.CLASS_TRANSFER_PRICE
     p["klass"] = klass
-    return f"⚡ 轉職成功！你已轉職為「{D.CLASSES[klass]['name']}」，技能書與武器強化全部繼承。"
+    return f"轉職成功！你已轉職為「{D.CLASSES[klass]['name']}」，技能書與武器強化全部繼承。"
 
 
 # ───────────── 故障之塔 / 每日挑戰 ─────────────

@@ -6,7 +6,7 @@ import { Link } from "@tanstack/react-router";
 export function NeedLogin({ what = "這個模式" }) {
   return (
     <div className="crpg-panel p-6 space-y-3">
-      <div className="text-[#ffd60a] crpg-glow-yellow text-lg">🔒 {what}需要帳號</div>
+      <div className="text-[#ffd60a] crpg-glow-yellow text-lg">{what}需要帳號</div>
       <p className="text-[13px] text-[#7be0a8]">成績、獎勵和排名都存在雲端伺服器（防止作弊），登入後就能挑戰。</p>
       <div className="flex gap-2">
         <Link to="/login" className="crpg-panel px-4 py-1.5 text-[#00ff88] crpg-glow">[ 登入 ]</Link>
@@ -60,7 +60,7 @@ export function RankTable({ rows, valueLabel = "分數", format = (v) => v?.toLo
       <tbody>
         {rows.map((r, i) => (
           <tr key={i} className={`border-t border-[#0f3a26] ${highlight && r.username === highlight ? "text-[#ffd60a]" : "text-[#cfeedd]"}`}>
-            <td className={`py-1 ${i < 3 ? "text-[#ffd60a] font-bold" : "text-[#3a8c5e]"}`}>{i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}</td>
+            <td className={`py-1 ${i < 3 ? "text-[#ffd60a] font-bold" : "text-[#3a8c5e]"}`}>{i + 1}</td>
             <td>{r.username}</td>
             <td className="text-right">{format(r.value ?? r.score ?? r.damage)}</td>
           </tr>
@@ -78,7 +78,7 @@ export function ModifierChips({ mods = [], info = {} }) {
     <div className="flex flex-wrap gap-1.5">
       {mods.map((m) => (
         <span key={m} title={info[m]?.desc} className="px-2 py-0.5 border border-[#c084fc]/50 text-[#c084fc] text-[11px]">
-          ⚠ {info[m]?.name || m}
+          {info[m]?.name || m}
           {info[m]?.desc && <span className="text-[#7be0a8]">：{info[m].desc}</span>}
         </span>
       ))}

@@ -106,21 +106,21 @@ function RaidPage() {
             <div className="text-[12px] text-[#00ff88] space-y-1">
               <div>領取成功：+{claim.gold.toLocaleString()}G</div>
               {claim.gear.map((g) => (
-                <div key={g.id} style={{ color: RARITY_COLOR[g.rarity] }}>🎁 {g.name}</div>
+                <div key={g.id} style={{ color: RARITY_COLOR[g.rarity] }}>{g.name}</div>
               ))}
             </div>
           )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-          <Panel title="🏆 傷害排行（本隻 Boss）">
+          <Panel title="傷害排行（本隻 Boss）">
             <RankTable rows={(boss?.top || []).map((r) => ({ username: r.username, value: r.damage }))} valueLabel="傷害" highlight={me} />
           </Panel>
-          <Panel title="⚡ 即時戰報">
+          <Panel title="即時戰報">
             <ul className="text-[12px] space-y-1">
               {feed.map((f) => (
                 <li key={f.at} className={f.killed ? "text-[#ffd60a] font-bold" : "text-[#cfeedd]"}>
-                  {f.by} 造成 {f.dealt.toLocaleString()} 傷害{f.killed ? " ★ 最後一擊！" : ""}
+                  {f.by} 造成 {f.dealt.toLocaleString()} 傷害{f.killed ? " 最後一擊！" : ""}
                 </li>
               ))}
               {!feed.length && <li className="text-[#3a8c5e]">等待其他玩家出手…（即時更新）</li>}

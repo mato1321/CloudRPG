@@ -98,11 +98,11 @@ function TowerPage() {
             )}
             {run?.active && run.pendingBlessing && (
               <div className="space-y-3">
-                <div className="text-[#00ff88] crpg-glow">✓ 通過！選擇一個祝福後挑戰第 {run.floor} 層：</div>
+                <div className="text-[#00ff88] crpg-glow">通過！選擇一個祝福後挑戰第 {run.floor} 層：</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   {Object.entries(run.blessings || {}).map(([k, b]) => (
                     <button key={k} onClick={() => act("/api/tower/blessing", { blessing: k })} className="crpg-panel p-3 text-left border border-[#ffd60a]/50 hover:border-[#ffd60a]">
-                      <div className="text-[#ffd60a] font-bold text-sm">✦ {b.name}</div>
+                      <div className="text-[#ffd60a] font-bold text-sm">{b.name}</div>
                       <div className="text-[12px] text-[#cfeedd]">{b.desc}</div>
                     </button>
                   ))}
@@ -134,7 +134,7 @@ function TowerPage() {
               </div>
             )}
           </Panel>
-          <Panel title="🏆 攀登排行榜">
+          <Panel title="攀登排行榜">
             <RankTable rows={board} valueLabel="最高樓層" format={(v) => `${v} F`} highlight={me} />
           </Panel>
         </div>

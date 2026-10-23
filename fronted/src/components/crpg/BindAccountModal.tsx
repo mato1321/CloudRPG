@@ -41,7 +41,7 @@ export function BindAccountModal({ reason, onBound, onClose }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
       <div className="crpg-panel w-full max-w-md p-6 border border-[#00ff88]/60">
         <div className="text-[#3a8c5e] text-[10px] tracking-widest mb-1">▌ SAVE YOUR PROGRESS</div>
-        <h2 className="text-[#00ff88] crpg-glow text-xl mb-2">💾 綁定帳號，保存冒險進度</h2>
+        <h2 className="text-[#00ff88] crpg-glow text-xl mb-2">綁定帳號，保存冒險進度</h2>
         <p className="text-[12px] text-[#7be0a8] leading-relaxed mb-4">
           {reason || "你已經打倒第一個 Boss 了！"}綁定後進度會存在雲端，換電腦也能繼續，
           還能解鎖<span className="text-[#ffd60a]">黑市、故障之塔、世界 Boss、公會、PvP 與排行榜</span>。

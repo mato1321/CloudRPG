@@ -74,7 +74,7 @@ function Market() {
   const headerExtra = (
     <>
       {klass && CLASS_META[klass] && (
-        <Stat label="CLASS" value={`${CLASS_META[klass].icon} ${CLASS_META[klass].name}`} color="text-[#00e5ff] crpg-glow-cyan" />
+        <Stat label="CLASS" value={CLASS_META[klass].name} color="text-[#00e5ff] crpg-glow-cyan" />
       )}
       <Stat label="GOLD" value={gold.toLocaleString()} color="text-[#ffd60a] crpg-glow-yellow" />
     </>
@@ -116,7 +116,7 @@ function Market() {
 
         {/* ⭐ 新增：高價轉職聖殿專區 */}
         <Panel
-          title={`⚡ 轉職聖殿 // CLASS TRANSFER CODEX · 轉職費用：${CLASS_TRANSFER_PRICE.toLocaleString()}G（保留等級、已學技能書進度與武器加成）`}
+          title={`轉職聖殿 // CLASS TRANSFER CODEX · 轉職費用：${CLASS_TRANSFER_PRICE.toLocaleString()}G（保留等級、已學技能書進度與武器加成）`}
         >
           <div className="text-xs text-[#cfeedd] mb-3">
             故事模式初始選定職業後即鎖定無法更改。唯有在此購買高價<span className="text-[#ffd60a] font-bold">「轉職聖典（{CLASS_TRANSFER_PRICE.toLocaleString()}G）」</span>，方可重塑靈魂轉換為其他職業！
@@ -134,7 +134,7 @@ function Market() {
                 >
                   <div className="flex items-center justify-between">
                     <span className={`text-base font-bold ${c.color}`}>
-                      {c.icon} {c.name} ({c.en})
+                      {c.name} ({c.en})
                     </span>
                     <span className="text-xs text-[#ffd60a] crpg-glow-yellow font-bold">
                       {isCurrent ? "[ 當前鎖定職業 ]" : `${CLASS_TRANSFER_PRICE.toLocaleString()}G`}
@@ -145,7 +145,7 @@ function Market() {
                     <div>· 技能 1 [R/L]：{c.skill1}</div>
                     <div>· 技能 2 [T/U]：{c.skill2}</div>
                     <div>· 技能 3 [Y/O]：{c.skill3}</div>
-                    <div className="text-[#ffd60a]">★ 奧義 [Q/I]：{c.ult}</div>
+                    <div className="text-[#ffd60a]">奧義 [Q/I]：{c.ult}</div>
                   </div>
                   <div className="mt-auto pt-1 flex items-center justify-between">
                     <span className="text-[10px] text-[#3a8c5e]">
@@ -194,7 +194,7 @@ function Market() {
                 <div key={it.id} className={`crpg-panel p-3 flex flex-col gap-2 ${cardBorder}`}>
                   <div className="flex items-center justify-between">
                     <span className={`text-sm font-bold ${RARITY[it.rarity]}`}>
-                      {it.isSkillBook ? "📘 " : it.classOnly ? "⚔ " : ""}
+                      
                       {it.name}
                     </span>
                     <span
@@ -240,7 +240,7 @@ function Market() {
         </Panel>
 
         {hasSave && (
-          <Panel title="🎒 裝備背包 // 隨機掉寶（護甲 / 飾品）">
+          <Panel title="裝備背包 // 隨機掉寶（護甲 / 飾品）">
             <GearPanel profile={state} onProfile={setState} />
           </Panel>
         )}

@@ -76,7 +76,7 @@ function Lobby() {
           <Panel title={`LIVE · ● ${boss?.online ?? "-"} 人在線`}>
             {boss ? (
               <div className="space-y-2">
-                <div className="text-[#ff7a90] text-sm font-bold">🐉 {boss.name}</div>
+                <div className="text-[#ff7a90] text-sm font-bold">{boss.name}</div>
                 <HpBar value={boss.hp} max={boss.hpMax} color="#ff4d6d" />
                 <div className="text-[11px] text-[#7be0a8]">{boss.participants} 位玩家參戰中</div>
                 <Link to="/raid" className="inline-block text-[#00e5ff] crpg-glow-cyan text-xs">[ 加入討伐 → ]</Link>
@@ -86,7 +86,7 @@ function Lobby() {
             )}
             {daily && (
               <div className="mt-4 border-t border-[#0f3a26] pt-3 space-y-1">
-                <div className="text-[#ffd60a] text-sm">📅 今日挑戰：{daily.enemy.name}</div>
+                <div className="text-[#ffd60a] text-sm">今日挑戰：{daily.enemy.name}</div>
                 <div className="text-[11px] text-[#c084fc]">{Object.values(daily.modifiers).map((m) => m.name).join(" · ")}</div>
                 <Link to="/daily" className="inline-block text-[#00e5ff] crpg-glow-cyan text-xs">[ 挑戰 → ]</Link>
               </div>
@@ -105,7 +105,7 @@ function Lobby() {
               ))}
             </ul>
           </Panel>
-          <Panel title="🏆 TOP PLAYERS">
+          <Panel title="TOP PLAYERS">
             <RankTable rows={top} valueLabel="等級" format={(v) => `Lv.${v}`} />
             <Link to="/ranking" className="inline-block mt-2 text-[#00e5ff] crpg-glow-cyan text-xs">[ 全部排行 → ]</Link>
           </Panel>

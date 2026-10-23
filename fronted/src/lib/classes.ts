@@ -3,7 +3,7 @@
 
 export const CLASSES = {
   warrior: {
-    id: "warrior", name: "戰士", en: "Warrior", icon: "⚔",
+    id: "warrior", name: "戰士", en: "Warrior", icon: "",
     color: "text-[#ff4d6d] crpg-glow-red",
     border: "border-[#3a0f1c] hover:border-[#ff4d6d]",
     desc: "鋼鐵之軀，近戰爆發。以血肉碾碎眼前的一切。",
@@ -23,7 +23,7 @@ export const CLASSES = {
     weaponAdv:   { id:"weapon_adv",   name:"日蝕殞落之劍", atk:35, price:3000 },
   },
   mage: {
-    id: "mage", name: "法師", en: "Mage", icon: "✦",
+    id: "mage", name: "法師", en: "Mage", icon: "",
     color: "text-[#a78bfa] crpg-glow-cyan",
     border: "border-[#1f1a4a] hover:border-[#a78bfa]",
     desc: "高魔詠唱者。以遠程法術撕裂時空與敵陣。",
@@ -43,7 +43,7 @@ export const CLASSES = {
     weaponAdv:   { id:"weapon_adv",   name:"全世操縱之杖", atk:35, price:3000 },
   },
   priest: {
-    id: "priest", name: "牧師", en: "Priest", icon: "✚",
+    id: "priest", name: "牧師", en: "Priest", icon: "",
     color: "text-[#ffd60a] crpg-glow-yellow",
     border: "border-[#3a2f0a] hover:border-[#ffd60a]",
     desc: "神諭之手。在傷害與恢復之間取得神聖平衡。",

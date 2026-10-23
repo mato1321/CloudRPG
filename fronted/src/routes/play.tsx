@@ -412,7 +412,7 @@ function PlayPage() {
             if (cancelled) return;
             setState((s) => ({ ...(s || local.state), name: auth.user, ...pickEcon(r.profile) }));
             setPicking(false);
-            push({ t: "system", text: r.imported ? "[SYS] 💾 訪客進度已綁定到帳號，之後會自動同步到雲端。" : "[SYS] 已載入帳號資料。" });
+            push({ t: "system", text: r.imported ? "[SYS] 訪客進度已綁定到帳號，之後會自動同步到雲端。" : "[SYS] 已載入帳號資料。" });
           } catch (e) {
             push({ t: "system", text: `[!!] 綁定失敗：${e.message}` });
           }
@@ -608,7 +608,7 @@ function PlayPage() {
 
   function gotoScene(id, effect) {
     if (!online && !GUEST_SCENES.has(id)) {
-      push({ t: "system", text: "[SYS] 🔒 接下來的冒險需要帳號才能保存（免費、10 秒完成）。" });
+      push({ t: "system", text: "[SYS] 接下來的冒險需要帳號才能保存（免費、10 秒完成）。" });
       setBindPrompt("想繼續冒險嗎？");
       return;
     }
@@ -671,7 +671,7 @@ function PlayPage() {
           } else {
             push({ t: "battle", text: "你戰敗了……在據點恢復一半體力後重新出發。" });
           }
-          for (const g of rw.gear || []) push({ t: "relic", text: `[LOOT] 🎁 ${g.name}（${statText(g.stats)}）→ 輸入 shop 打開「裝備背包」穿上它！` });
+          for (const g of rw.gear || []) push({ t: "relic", text: `[LOOT] ${g.name}（${statText(g.stats)}）→ 輸入 shop 打開「裝備背包」穿上它！` });
           if (r.levelUps > 0) push({ t: "system", text: `▲ LEVEL UP! → LV ${r.profile.level}（HP、MP、ATK 全面提升）` });
           setState((s) => {
             if (!s) return s;
@@ -886,7 +886,7 @@ function PlayPage() {
     if (cmd === "load") return loadGame();
     if (cmd === "stats") {
       const cls = CLASSES[state.klass];
-      return push({ t:"system", text:`${state.name} · ${cls.icon} ${cls.name} · LV ${state.level}` },
+      return push({ t:"system", text:`${state.name} · ${cls.name} · LV ${state.level}` },
         { t:"dim", text:`HP ${state.hp}/${state.hpMax}  MP ${state.mp}/${state.mpMax}  EXP ${state.exp}/${state.expMax}  GOLD ${state.gold}  ATK ${state.atk}` });
     }
     if (cmd === "skills") {
@@ -899,11 +899,11 @@ function PlayPage() {
         { t: state.learnedSkill2 ? "player" : "dim", text:`  2. [T/U] ${state.learnedSkill2 ? cls.normal[1].name : "??? (需於商店購買「進階技能書・卷一」)"}` },
         { t: state.learnedSkill3 ? "player" : "dim", text:`  3. [Y/O] ${state.learnedSkill3 ? cls.normal[2].name : "??? (需於商店購買「進階技能書・卷二」)"}` },
         { t: state.learnedUlt ? "ult" : "dim",
-          text: state.learnedUlt ? `★ 奧義 [Q/I]：${cls.ultimate.name}（100% 氣條施放）` : `★ 奧義 [Q/I]：??? （需於商店購買「終極奧義技能書」解鎖）` });
+          text: state.learnedUlt ? `奧義 [Q/I]：${cls.ultimate.name}（100% 氣條施放）` : `奧義 [Q/I]：??? （需於商店購買「終極奧義技能書」解鎖）` });
     }
     if (cmd === "party") {
       const lines = [{ t:"system", text:"── 三人組隊 (Matchmaking) ──" },
-        { t:"dim", text:`  ★ ${state.name}（你 · ${CLASSES[state.klass].name}） HP ${state.hp}/${state.hpMax}` }];
+        { t:"dim", text:`  ${state.name}（你 · ${CLASSES[state.klass].name}） HP ${state.hp}/${state.hpMax}` }];
       (state.party||[]).forEach((a) => {
         const cc = CLASSES[a.klass];
         lines.push({ t:"dim", text:`  · ${a.name}（${cc.name} · AI） HP ${a.hp}/${a.hpMax} ${a.alive?"":"[KO]"}` });
@@ -925,7 +925,7 @@ function PlayPage() {
       const cls = CLASSES[lockedKlass];
       skipIntroRef.current = false;
       setLog([
-        { t:"system", text:`[SYS] 故事章節已重啟。你的職業已鎖定為「${cls.icon} ${cls.name}」不可直接更改。`, shown:0 },
+        { t:"system", text:`[SYS] 故事章節已重啟。你的職業已鎖定為「${cls.name}」不可直接更改。`, shown:0 },
         { t:"system", text:`[SYS] 若欲轉換職業，請前往 [MARKET] 黑市購買高價「轉職聖典」！`, shown:0 },
       ]);
       setState((s) => ({
@@ -988,7 +988,6 @@ function PlayPage() {
               <button key={c.id} onClick={() => chooseClass(c.id)}
                 className={`crpg-panel text-left p-5 border ${c.border} transition group hover:-translate-y-0.5`}>
                 <div className="flex items-center gap-3 mb-3">
-                  <span className={`text-3xl ${c.color}`}>{c.icon}</span>
                   <div>
                     <div className={`text-lg ${c.color}`}>{c.name}</div>
                     <div className="text-[10px] text-[#3a8c5e] tracking-widest">{c.en.toUpperCase()}</div>
@@ -1005,7 +1004,7 @@ function PlayPage() {
                   <li>· 初始技能 [R/L]：{c.normal[0].name}</li>
                   <li className="text-[#3a8c5e]">· 進階卷一 [T/U]：{c.normal[1].name}（商店解鎖）</li>
                   <li className="text-[#3a8c5e]">· 進階卷二 [Y/O]：{c.normal[2].name}（商店解鎖）</li>
-                  <li className="text-[#3a8c5e]">★ 終極奧義 [Q/I]：{c.ultimate.name}（商店解鎖）</li>
+                  <li className="text-[#3a8c5e]">終極奧義 [Q/I]：{c.ultimate.name}（商店解鎖）</li>
                 </ul>
                 <div className="text-[10px] text-[#3a8c5e]">專屬武器</div>
                 <div className="text-[11px] text-[#cfeedd]">{c.weaponBasic.name} → {c.weaponAdv.name}</div>
@@ -1015,7 +1014,7 @@ function PlayPage() {
               </button>
             ))}
           </div>
-          <div className="text-[10px] text-[#ffd60a]">⚠️ 建立角色後職業即永久綁定並自動存檔；欲學更多技能或轉職請前往 [MARKET] 黑市商店。</div>
+          <div className="text-[10px] text-[#ffd60a]">建立角色後職業即永久綁定並自動存檔；欲學更多技能或轉職請前往 [MARKET] 黑市商店。</div>
         </div>
       </Shell>
     );
@@ -1025,7 +1024,7 @@ function PlayPage() {
 
   const headerExtra = (
     <>
-      <Stat label="CLASS" value={`${cls.icon} ${cls.name} [LOCKED]`} color={cls.color} />
+      <Stat label="CLASS" value={`${cls.name} [LOCKED]`} color={cls.color} />
       <Stat label="HP"   value={`${state.hp}/${state.hpMax}`} color="text-[#ff4d6d] crpg-glow-red" />
       <Stat label="MP"   value={`${state.mp}/${state.mpMax}`} color="text-[#00e5ff] crpg-glow-cyan" />
       <Stat label="GOLD" value={state.gold} color="text-[#ffd60a] crpg-glow-yellow" />
@@ -1039,7 +1038,7 @@ function PlayPage() {
         { cmd:"skill 1", label:`技能1：${cls.normal[0].name}` },
         ...(state.learnedSkill2 ? [{ cmd:"skill 2", label:`技能2：${cls.normal[1].name}` }] : []),
         ...(state.learnedSkill3 ? [{ cmd:"skill 3", label:`技能3：${cls.normal[2].name}` }] : []),
-        ...(state.learnedUlt ? [{ cmd:"ult", label:`★ 奧義：${cls.ultimate.name}` }] : []),
+        ...(state.learnedUlt ? [{ cmd:"ult", label:`奧義：${cls.ultimate.name}` }] : []),
         { cmd:"item",   label:`使用草藥 (×${state.inv.herb||0})` },
         { cmd:"flee",   label:"逃跑" },
       ]
@@ -1077,11 +1076,11 @@ function PlayPage() {
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-3 flex-1 min-h-0 overflow-hidden">
         <section className="crpg-panel flex flex-col overflow-hidden min-h-0">
           <div className="flex items-center justify-between px-3 py-1.5 border-b border-[#0f3a26] text-[10px] uppercase tracking-widest">
-            <span className="text-[#3a8c5e]">tty1 · {scene.location || state.sceneId}{state.battle ? "  ·  [⚔ INTERACTIVE ARCADE COMBAT]" : ""}</span>
+            <span className="text-[#3a8c5e]">tty1 · {scene.location || state.sceneId}{state.battle ? "  ·  [INTERACTIVE ARCADE COMBAT]" : ""}</span>
             <span className="flex items-center gap-2">
               {typing && (
                 <button onClick={skipText} className="px-2 py-0.5 border border-[#0f3a26] text-[#ffd60a] hover:border-[#ffd60a] normal-case tracking-normal">
-                  ⏭ 跳過
+                  跳過
                 </button>
               )}
               {!online && (
@@ -1109,7 +1108,7 @@ function PlayPage() {
               }}
               onUseTotem={(reviveHp) => {
                 setState((s) => s ? ({ ...s, hp: reviveHp, inv: { ...s.inv, totem: Math.max(0, (s.inv.totem || 1) - 1) } }) : s);
-                push({ t: "relic", text: "★ 不死圖騰發出耀眼光芒！你從致命傷中復活並恢復 60% HP！" });
+                push({ t: "relic", text: "不死圖騰發出耀眼光芒！你從致命傷中復活並恢復 60% HP！" });
               }}
               onSyncHpMp={(newHp, newMp, newEnemyHp) => {
                 setState((s) => {
@@ -1181,7 +1180,7 @@ function PlayPage() {
               </label>
               <div className="flex-1">
                 <div className="text-[#00ff88] crpg-glow text-sm">{state.name}</div>
-                <div className={`${cls.color} text-[11px]`}>{cls.icon} {cls.name} · LV {state.level}</div>
+                <div className={`${cls.color} text-[11px]`}>{cls.name} · LV {state.level}</div>
                 <div className="mt-2 space-y-1.5">
                   {[
                     { l:"HP",  c:"ff4d6d", v:state.hp,  m:state.hpMax,  cls:"hp" },
@@ -1218,7 +1217,7 @@ function PlayPage() {
                     return (
                       <li key={a.id} className={a.alive ? "" : "opacity-50"}>
                         <div className="flex justify-between text-[10px]">
-                          <span className={cc.color}>{cc.icon} {a.name} <span className="text-[#3a8c5e]">[AI]</span></span>
+                          <span className={cc.color}>{a.name} <span className="text-[#3a8c5e]">[AI]</span></span>
                           <span className="text-[#3a8c5e]">{a.hp}/{a.hpMax}{a.alive?"":" KO"}</span>
                         </div>
                         <div className="crpg-bar hp"><span style={{ width: `${(a.hp/a.hpMax)*100}%` }} /></div>
@@ -1253,7 +1252,7 @@ function PlayPage() {
                 </li>
                 <li className="flex justify-between">
                   <span className={state.learnedUlt ? "text-[#ff4d6d] crpg-glow-red" : "text-[#3a8c5e]"}>
-                    ★ [Q/I] {state.learnedUlt ? cls.ultimate.name : "??? (終極奧義書)"}
+                    [Q/I] {state.learnedUlt ? cls.ultimate.name : "??? (終極奧義書)"}
                   </span>
                   <span className="text-[#3a8c5e]">{state.learnedUlt ? "已習得" : "商店 2000G"}</span>
                 </li>
@@ -1275,7 +1274,7 @@ function PlayPage() {
                 <div className="text-[10px] tracking-widest text-[#3a8c5e] mb-1 border-b border-[#0f3a26] pb-1">▌ EQUIPPED</div>
                 <ul className="space-y-0.5">
                   {state.equipped.map((eq, i) => (
-                    <li key={i} className="text-[#00e5ff] crpg-glow-cyan">⚙ {eq}</li>
+                    <li key={i} className="text-[#00e5ff] crpg-glow-cyan">{eq}</li>
                   ))}
                   {(state.gear || []).filter((g) => Object.values(state.equippedGear || {}).includes(g.id)).map((g) => (
                     <li key={g.id} style={{ color: RARITY_COLOR[g.rarity] }} title={statText(g.stats)}>◈ {g.name}</li>

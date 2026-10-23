@@ -66,7 +66,7 @@ function DailyPage() {
                 <ModifierChips mods={enemy.modifiers} info={info.modifiers} />
                 {info.mine && (
                   <div className="text-[12px] text-[#cfeedd]">
-                    你的今日最佳：<span className="text-[#ffd60a]">{info.mine.score.toLocaleString()}</span> 分{info.mine.cleared ? " · 已通關 ✓" : ""}
+                    你的今日最佳：<span className="text-[#ffd60a]">{info.mine.score.toLocaleString()}</span> 分{info.mine.cleared ? " · 已通關" : ""}
                   </div>
                 )}
                 {!isLoggedIn() ? (
@@ -81,7 +81,7 @@ function DailyPage() {
               </div>
             )}
           </Panel>
-          <Panel title="🏆 今日排行榜">
+          <Panel title="今日排行榜">
             <RankTable rows={(info?.top || []).map((r) => ({ username: r.username, value: r.score }))} valueLabel="分數" highlight={me} />
           </Panel>
         </div>

@@ -61,7 +61,7 @@ export function GearPanel({ profile, onProfile }) {
                 >
                   [ 分解 ]
                 </button>
-                {on && <span className="ml-auto text-[#00ff88]">✓ 裝備中（{RARITY_NAME[g.rarity]}光效）</span>}
+                {on && <span className="ml-auto text-[#00ff88]">裝備中（{RARITY_NAME[g.rarity]}光效）</span>}
               </div>
             </div>
           );
