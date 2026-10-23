@@ -64,3 +64,45 @@ def test_admin_balance_report(client, new_user):
     assert story["count"] >= 1 and 0 <= story["winRate"] <= 1
     assert rep["economy"]["players"] >= 1 and "median" in rep["economy"]["gold"]
     assert any(x["mode"] == "story" for x in rep["income"])
+
+
+def test_tower_power_blessing_is_capped(client, new_user):
+    from app.db.database import SessionLocal
+    from app.models.game import TowerRun
+    _, h = new_user("warrior")
+    run = client.post("/api/tower/start", headers=h).json()
+    db = SessionLocal()
+    r = db.query(TowerRun).filter(TowerRun.id == __import__("uuid").UUID(run["id"])).first()
+    r.buffs, r.pending_blessing = {"power": D.TOWER_POWER_MAX}, True
+    db.commit()
+    db.close()
+    view = client.get("/api/tower", headers=h).json()
+    assert "power" not in view["blessings"]
+    assert client.post("/api/tower/blessing", json={"blessing": "power"}, headers=h).status_code == 409
+
+
+def test_tower_boss_floors_are_tougher():
+    normal, boss = E.tower_floor(7, 9), E.tower_floor(7, 10)
+    assert boss["boss"] and boss["hp"] > normal["hp"] * D.TOWER_BOSS_HP * 0.9
+
+
+def test_chapter5_gating_and_memory_drops(client, new_user):
+    from app.db.database import SessionLocal
+    from app.models.game import PlayerProfile
+    from app.models.user import User
+    name, h = new_user("warrior")
+    assert client.post("/api/battle/start", json={"mode": "story", "key": "knight"}, headers=h).status_code == 403
+    db = SessionLocal()
+    uid = db.query(User).filter(User.username == name).first().id
+    row = db.query(PlayerProfile).filter(PlayerProfile.user_id == uid).first()
+    data = dict(row.data)
+    data["bossesDefeated"] = ["minions", "duke", "abyss", "skyisle", "demonlord"]
+    data["level"] = 30
+    row.data = data
+    db.commit()
+    db.close()
+    assert client.post("/api/battle/start", json={"mode": "story", "key": "courtmage"}, headers=h).status_code == 403
+    r = win_story(client, h, "knight", seconds=60)
+    assert r["rewards"]["items"].get("memory_1") == 1
+    r = win_story(client, h, "courtmage", seconds=60)
+    assert r["rewards"]["items"].get("memory_2") == 1

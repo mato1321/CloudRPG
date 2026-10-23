@@ -45,7 +45,9 @@ def _run_view(run: TowerRun | None, best: int) -> dict:
         "pendingBlessing": run.pending_blessing,
         "next": E.tower_floor(run.seed, run.floor),
         "best": best,
-        "blessings": D.BLESSINGS,
+        # 力量刻印疊滿就不再提供
+        "blessings": {k: v for k, v in D.BLESSINGS.items() if k != "power" or (run.buffs or {}).get("power", 0) < D.TOWER_POWER_MAX},
+        "powerMax": D.TOWER_POWER_MAX,
         "modifiers": D.MODIFIERS,
     }
 
@@ -86,6 +88,8 @@ def tower_blessing(req: BlessingReq, user: User = Depends(get_current_user), db:
     if req.blessing == "heal":
         run.hp_ratio = min(1.0, run.hp_ratio + 0.4)
     elif req.blessing == "power":
+        if buffs.get("power", 0) >= D.TOWER_POWER_MAX:
+            raise HTTPException(status_code=409, detail=f"力量刻印最多疊 {D.TOWER_POWER_MAX} 層，請選其他祝福")
         buffs["power"] = buffs.get("power", 0) + 1
     elif req.blessing == "energy":
         buffs["energy"] = True

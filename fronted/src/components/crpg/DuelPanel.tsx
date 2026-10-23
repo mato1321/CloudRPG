@@ -1,59 +1,80 @@
 // @ts-nocheck
-/* 自由對戰頁的「線上即時對戰」面板：快速配對 / 建立房間 / 用房號加入。
- * 配對成功後把連線交給 arena 的格鬥引擎（netRef），房主模擬、對手送按鍵。 */
+/* 即時連線面板（自由對戰頁）：
+ *   kind="duel"  線上即時對戰：快速配對 / 建立房間 / 房號加入 → 大廳選角色、房主選場地 → 房主按開始
+ *   kind="coop"  組隊共鬥世界 Boss（2–4 人）：建立隊伍 / 房號加入 → 用自己的 RPG 職業出戰 → 房主按開始
+ * 開打後把連線交給 arena 的格鬥引擎（netRef）：房主模擬，其他人送按鍵。 */
 import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { DuelClient } from "../../lib/duel";
-import { isLoggedIn } from "../../lib/api";
+import { api, isLoggedIn } from "../../lib/api";
 
-export function DuelPanel({ fighter, stage, netRef, onStart, onStop }) {
-  const [status, setStatus] = useState("選好上方 1P 的角色，再選擇配對方式");
-  const [phase, setPhaseState] = useState("idle"); // idle | waiting | room | playing
-  const phaseRef = useRef("idle"); // 給連線的訊息處理器讀最新值
+export function DuelPanel({ kind = "duel", fighters, stages, fighter, stage, netRef, onStart, onStop, onCoopEnd }) {
+  const coop = kind === "coop";
+  const [status, setStatus] = useState(coop ? "組隊打世界 Boss：建立隊伍後把房號給隊友（最多 4 人）" : "選擇配對方式");
+  const [phase, setPhaseState] = useState("idle"); // idle | waiting | lobby | playing
+  const phaseRef = useRef("idle");
   const setPhase = (v) => {
     phaseRef.current = v;
     setPhaseState(v);
   };
-  const [code, setCode] = useState("");
+  const [lobby, setLobby] = useState(null);
   const [joinCode, setJoinCode] = useState("");
+  const [myFighter, setMyFighter] = useState(fighter);
+  const [result, setResult] = useState(null);
   const client = useRef<DuelClient | null>(null);
   const logged = isLoggedIn();
+
+  // 組隊共鬥用自己的 RPG 職業
+  useEffect(() => {
+    if (!coop || !logged) return;
+    api("/api/profile")
+      .then((d) => d.profile?.klass && setMyFighter(`${d.profile.klass}_rpg`))
+      .catch(() => {});
+  }, [coop, logged]);
 
   useEffect(() => () => leave(), []);
 
   async function ensure() {
     if (client.current?.ws?.readyState === WebSocket.OPEN) return client.current;
     const c = new DuelClient();
-    c.on((m) => {
-      if (m.t === "in") return netRef.current?.handleInput?.(m.c, !!m.d);
+    c.on(async (m) => {
+      if (m.t === "in") return netRef.current?.handleInput?.(m.s, m.c, !!m.d, m.h);
       if (m.t === "st") return netRef.current?.onSnapshot?.(m.s);
-      if (m.t === "created") {
-        setCode(m.code);
-        setPhase("room");
-        setStatus("房間已建立，把房號告訴朋友");
-      } else if (m.t === "waiting") {
+      if (m.t === "waiting") {
         setPhase("waiting");
         setStatus("配對中，等待另一位玩家……");
+      } else if (m.t === "lobby") {
+        setLobby(m);
+        setPhase("lobby"); // 建立 / 加入後，或一局結束後回到大廳
+        setStatus(m.players.length < 2 ? "等待隊友加入……" : m.you === 0 ? "人到齊了，按「開始」" : "等待房主開始");
       } else if (m.t === "start") {
         setPhase("playing");
-        setCode(m.code);
-        const me = m.role === "host" ? m.host.name : m.guest.name;
-        const opp = m.role === "host" ? m.guest.name : m.host.name;
-        setStatus(`對戰開始：${me}（${m.role === "host" ? "左邊 1P，房主" : "右邊 2P"}） VS ${opp}`);
-        onStart(m, c);
+        setResult(null);
+        setStatus(coop ? "討伐開始！45 秒內打出最多傷害" : `對戰開始：${m.players.map((p) => p.name).join(" VS ")}`);
+        try {
+          await onStart(m, c);
+          if (netRef.current && m.you === 0) {
+            netRef.current.onCoopEnd = async (r) => setResult(await onCoopEnd(r));
+          }
+        } catch (e) {
+          setStatus(`無法開始：${e.message}`);
+        }
       } else if (m.t === "end") {
-        setStatus(m.winner === "guest" ? "你贏了！等房主開下一局" : "你輸了，等房主開下一局");
-      } else if (m.t === "rematch") {
-        setStatus("房主開了新的一局！");
+        if (coop) setResult(await onCoopEnd(m.result));
+        else setStatus(m.result?.winner === "guest" ? "你贏了！" : "你輸了……");
+      } else if (m.t === "dropped") {
+        netRef.current?.onDropped?.(m.slot);
+        setStatus(`${m.name} 斷線了`);
       } else if (m.t === "left" || m.t === "closed") {
         if (phaseRef.current !== "idle") setStatus(m.msg || "連線已中斷");
         setPhase("idle");
-        setCode("");
+        setLobby(null);
         onStop();
-      } else if (m.t === "error") {
+      } else if (m.t === "info" || m.t === "error") {
         setStatus(m.msg);
       } else if (m.t === "idle") {
         setPhase("idle");
+        setLobby(null);
       }
     });
     await c.connect();
@@ -64,7 +85,7 @@ export function DuelPanel({ fighter, stage, netRef, onStart, onStop }) {
   async function act(msg) {
     try {
       const c = await ensure();
-      c.send({ ...msg, fighter, stage });
+      c.send({ fighter: myFighter, stage, kind, ...msg });
     } catch (e) {
       setStatus(e.message);
     }
@@ -75,29 +96,33 @@ export function DuelPanel({ fighter, stage, netRef, onStart, onStop }) {
     client.current?.close();
     client.current = null;
     setPhase("idle");
-    setCode("");
+    setLobby(null);
     onStop();
   }
 
   if (!logged) {
     return (
       <div className="crpg-panel p-3 text-xs text-[#cfeedd]">
-        線上即時對戰需要帳號（用來顯示名字與紀錄戰績）。
+        {coop ? "組隊討伐" : "線上即時對戰"}需要帳號。
         <Link to="/login" className="ml-2 text-[#00e5ff] underline">登入</Link>
         <Link to="/register" className="ml-2 text-[#00e5ff] underline">註冊</Link>
       </div>
     );
   }
 
-  const btn = "px-3 py-1.5 border font-bold transition border-[#0f3a26] text-[#7be0a8] hover:border-[#00ff88] hover:text-[#00ff88]";
+  const btn = "px-3 py-1.5 border font-bold transition border-[#0f3a26] text-[#7be0a8] hover:border-[#00ff88] hover:text-[#00ff88] disabled:opacity-40";
+  const isHost = lobby?.you === 0;
+  const fighterName = (id) => fighters.find((f) => f.id === id)?.name || id;
+
   return (
     <div className="crpg-panel p-3 text-xs space-y-2">
-      <div className="text-[#ffd60a] font-bold">線上即時對戰 // ONLINE VERSUS</div>
+      <div className="text-[#ffd60a] font-bold">{coop ? "組隊討伐世界 BOSS // CO-OP RAID（2–4 人）" : "線上即時對戰 // ONLINE VERSUS"}</div>
       <div className="text-[#cfeedd]">{status}</div>
+
       {phase === "idle" && (
         <div className="flex flex-wrap items-center gap-2">
-          <button className={btn} onClick={() => act({ t: "queue" })}>[ 快速配對 ]</button>
-          <button className={btn} onClick={() => act({ t: "create" })}>[ 建立房間 ]</button>
+          {!coop && <button className={btn} onClick={() => act({ t: "queue" })}>[ 快速配對 ]</button>}
+          <button className={btn} onClick={() => act({ t: "create" })}>[ {coop ? "建立隊伍" : "建立房間"} ]</button>
           <input
             value={joinCode}
             onChange={(e) => setJoinCode(e.target.value.toUpperCase().slice(0, 4))}
@@ -107,15 +132,79 @@ export function DuelPanel({ fighter, stage, netRef, onStart, onStop }) {
           <button className={btn} disabled={joinCode.length !== 4} onClick={() => act({ t: "join", code: joinCode })}>[ 加入 ]</button>
         </div>
       )}
-      {phase === "room" && (
-        <div className="text-lg text-[#00ff88] crpg-glow tracking-[0.4em]">房號：{code}</div>
+
+      {lobby && phase !== "idle" && (
+        <div className="space-y-2">
+          <div className="text-base text-[#00ff88] crpg-glow tracking-[0.3em]">房號：{lobby.code}</div>
+          <div className="space-y-0.5">
+            {lobby.players.map((p, i) => (
+              <div key={i} className={i === lobby.you ? "text-[#ffd60a]" : "text-[#cfeedd]"}>
+                {i === 0 ? "[房主] " : `[${i + 1}P] `}
+                {p.name} · {fighterName(p.fighter)}
+                {i === lobby.you ? "（你）" : ""}
+              </div>
+            ))}
+            {Array.from({ length: lobby.capacity - lobby.players.length }).map((_, i) => (
+              <div key={`e${i}`} className="text-[#3a8c5e]">（空位）</div>
+            ))}
+          </div>
+          {phase === "lobby" && (
+            <div className="flex flex-wrap items-center gap-2">
+              {!coop && (
+                <label className="flex items-center gap-1">
+                  你的角色
+                  <select
+                    value={lobby.players[lobby.you]?.fighter}
+                    onChange={(e) => {
+                      setMyFighter(e.target.value);
+                      client.current?.send({ t: "pick", fighter: e.target.value });
+                    }}
+                    className="bg-[#03130b] border border-[#0f3a26] px-1 py-1 text-[#00ff88]"
+                  >
+                    {fighters.map((f) => (
+                      <option key={f.id} value={f.id}>{f.name}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {!coop && isHost && (
+                <label className="flex items-center gap-1">
+                  場地
+                  <select
+                    value={lobby.stage}
+                    onChange={(e) => client.current?.send({ t: "pick", stage: Number(e.target.value) })}
+                    className="bg-[#03130b] border border-[#0f3a26] px-1 py-1 text-[#00ff88]"
+                  >
+                    {stages.map((s, i) => (
+                      <option key={s.id} value={i}>{s.name}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {isHost && (
+                <button className={btn} disabled={lobby.players.length < 2} onClick={() => client.current?.send({ t: "go" })}>
+                  [ 開始 ]
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       )}
-      {phase !== "idle" && (
-        <button className={btn} onClick={leave}>[ 離開對戰 ]</button>
+
+      {result && (
+        <div className="text-[#ffd60a]">
+          {result.killed ? "BOSS 被打倒了！ " : ""}
+          你的傷害 {result.dealt?.toLocaleString?.() ?? result.mine}
+          {result.error ? ` · 結算失敗：${result.error}` : ` · 獲得 ${result.gold}G / ${result.xp} EXP${result.killed ? "（到世界 Boss 頁領討伐獎勵）" : ""}`}
+        </div>
       )}
+
+      {phase !== "idle" && <button className={btn} onClick={leave}>[ 離開 ]</button>}
       <div className="text-[#3a8c5e]">
-        房主（左邊）的畫面就是正式結果；對手（右邊）用自己的 WASD + F/G/R/T/Y/Q（或觸控按鍵）操作。
-        兩邊都在台灣時延遲約 0.3–0.5 秒，屬友誼賽：不影響積分與金幣，但會記錄戰績。
+        {coop
+          ? "每個人用自己的 RPG 職業出戰，Boss 會追最近的隊員；傷害照常計入全服世界 Boss，各自結算獎勵。"
+          : "房主（左邊）的畫面就是正式結果；其他人用自己的 WASD + F/G/R/T/Y/Q（或觸控按鍵）操作。友誼賽：不影響積分與金幣，但會記錄戰績。"}
+        {" "}兩邊都在台灣時延遲約 0.3–0.5 秒。
       </div>
     </div>
   );

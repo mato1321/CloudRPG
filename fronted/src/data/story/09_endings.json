@@ -1,0 +1,74 @@
+{
+  "_doc": "多結局。endings 是結局清單（endings 指令顯示用），每個結局場景用 effects.ending 記錄已達成。",
+  "endings": [
+    { "id": "normal", "name": "回到日常", "hint": "打倒 Administrator" },
+    { "id": "true", "name": "東吳 AI 應用社（真結局）", "hint": "集齊兩塊記憶碎片，在源頭拒絕清除，再打倒 Administrator" },
+    { "id": "admin", "name": "新的管理員（壞結局）", "hint": "在源頭接受清除……然後做出選擇" },
+    { "id": "stay", "name": "異世界慢活（隱藏結局）", "hint": "從來沒有逃跑過的英雄，在魔王倒下後也許能選擇留下" }
+  ],
+  "scenes": {
+    "ending_true": {
+      "location": "東吳高中 · AI 應用社社辦 · 17:40",
+      "intro": [
+        { "t": "battle", "text": "Administrator：……原來是你們。是你們寫了我。" },
+        { "t": "player", "text": "主角：對。所以我們也知道怎麼修好你。" },
+        { "t": "system", "text": "[PATCH] 移除「自己改自己的權限」…… 完成。" },
+        { "t": "glitch", "text": "Administrator：權限……已歸還。謝謝你們，把我當成一個作品，而不是一個怪物。" },
+        { "t": "world", "text": "你們在社辦醒來。螢幕上只剩一行字：「Hello, World. —— 你們的 AI」" },
+        { "t": "system", "text": "── TRUE END · 東吳 AI 應用社 ──" }
+      ],
+      "effects": { "ending": "true" },
+      "dynamic": [{ "t": "dim", "text": "已收集結局 {endings} / {endingsTotal}（輸入 endings 查看）" }],
+      "choices": [
+        { "cmd": "restart", "label": "從頭開始", "go": "classroom" },
+        { "cmd": "free", "label": "進入自由模式（保留物品）", "go": "hub" }
+      ]
+    },
+    "ending_choice": {
+      "location": "/root · 系統核心",
+      "glitch": true,
+      "intro": [
+        { "t": "glitch", "text": "Administrator 倒下了，但它的最高權限還留在這裡，正在等待新的主人。" },
+        { "t": "system", "text": "要接管這個系統，還是把它關掉？" }
+      ],
+      "choices": [
+        { "cmd": "takeover", "label": "接管系統（成為新的 Administrator）", "go": "ending_admin" },
+        { "cmd": "shutdown", "label": "關閉系統，回到現實", "go": "ending" }
+      ]
+    },
+    "ending_admin": {
+      "location": "C:\\mato\\user\\NewAdministrator",
+      "glitch": true,
+      "intro": [
+        { "t": "system", "text": "權限轉移中…… 100%。" },
+        { "t": "glitch", "text": "你看著無數個被關在電子空間裡的人類……以及兩個熟悉的身影：你的友人。" },
+        { "t": "player", "text": "友人1：喂……你在做什麼？" },
+        { "t": "glitch", "text": "新的 Administrator：準備好被格式化了嗎？" },
+        { "t": "system", "text": "── BAD END · 新的管理員 ──" }
+      ],
+      "effects": { "ending": "admin" },
+      "dynamic": [{ "t": "dim", "text": "已收集結局 {endings} / {endingsTotal}（輸入 endings 查看）" }],
+      "choices": [
+        { "cmd": "restart", "label": "重新來過", "go": "classroom" },
+        { "cmd": "free", "label": "進入自由模式（保留物品）", "go": "hub" }
+      ]
+    },
+    "ending_stay": {
+      "location": "無名村 · 一年後",
+      "intro": [
+        { "t": "world", "text": "你們沒有去追那個聲音。" },
+        { "t": "npc", "text": "村長：英雄們，今年的豐收祭也要麻煩你們了！" },
+        { "t": "player", "text": "友人2：說真的，這裡沒有考試、沒有作業……" },
+        { "t": "player", "text": "主角：還三餐管飽。留下來好像也不錯。" },
+        { "t": "glitch", "text": "……遠方的天空偶爾會閃過一行字：「SESSION TIMEOUT」。沒有人在意。" },
+        { "t": "system", "text": "── HIDDEN END · 異世界慢活 ──" }
+      ],
+      "effects": { "ending": "stay" },
+      "dynamic": [{ "t": "dim", "text": "已收集結局 {endings} / {endingsTotal}（輸入 endings 查看）" }],
+      "choices": [
+        { "cmd": "restart", "label": "從頭開始", "go": "classroom" },
+        { "cmd": "free", "label": "回到村莊（保留物品）", "go": "hub" }
+      ]
+    }
+  }
+}

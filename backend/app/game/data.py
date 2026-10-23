@@ -29,6 +29,9 @@ ENEMIES = {
     "skyisle": {"name": "天光島嶼之主", "hp": 480, "xp": 420, "gold": 800, "drop": "stone_gold", "boss": True},
     "demonlord": {"name": "魔王 (21世紀程式語言版)", "hp": 550, "xp": 600, "gold": 1200, "boss": True},
     "admin": {"name": "Administrator", "hp": 680, "xp": 9999, "gold": 9999, "boss": True},
+    # 第五章 · 宮廷的真相（擊敗魔王後解鎖；劇情資料在 fronted/src/data/story/05_palace.json）
+    "knight": {"name": "王國騎士團長（被感染）", "hp": 560, "xp": 700, "gold": 1300, "drop": "memory_1", "boss": True},
+    "courtmage": {"name": "宮廷魔法師", "hp": 620, "xp": 850, "gold": 1600, "drop": "memory_2", "boss": True},
 }
 
 # 劇情中撿到的東西：每個 id 每個帳號只能領一次
@@ -89,9 +92,12 @@ MODIFIERS = {
     "fog": {"name": "迷霧", "desc": "視野變暗"},
     "giant": {"name": "巨大化", "desc": "敵人血量 +60%、體型變大"},
 }
+TOWER_POWER_MAX = 3  # 力量刻印最多疊 3 層（+36%），避免後期幾下就打死 Boss
+TOWER_BOSS_HP = 1.5  # 每 5 層的 Boss 額外血量倍率
+TOWER_BOSS_ATK = 1.15
 BLESSINGS = {
     "heal": {"name": "生命泉水", "desc": "回復 40% HP"},
-    "power": {"name": "力量刻印", "desc": "本次攀登 ATK +12%（可疊加）"},
+    "power": {"name": "力量刻印", "desc": "本次攀登 ATK +12%（最多疊 3 層）"},
     "herb": {"name": "補給包", "desc": "獲得草藥 ×2"},
     "energy": {"name": "超頻核心", "desc": "之後每層開場氣條 +40%"},
 }

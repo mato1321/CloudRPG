@@ -154,6 +154,49 @@ export const STORY_ENEMY_PROFILES: Record<string, any> = {
     bgTop: "#19082b",
     bgFloor: "#2d0f4d",
   },
+  // 第五章 · 宮廷的真相（擊敗魔王後解鎖）
+  knight: {
+    name: "王國騎士團長（被感染）",
+    title: "CHAPTER 5 · 被程式碼控制的王國之盾",
+    color: "#94a3b8",
+    secondary: "#22c55e",
+    belt: "#1e293b",
+    headband: "#22c55e",
+    visualType: "warrior",
+    hp: 560,
+    atkMul: 1.32,
+    speed: 4.3,
+    jumpForce: 12.6,
+    aggr: 0.66,
+    block: 0.5,
+    specialName: "王國聖劍波",
+    upperName: "鐵壁昇龍斬",
+    dashName: "騎士團衝鋒",
+    superName: "王命・千軍斷罪",
+    bgTop: "#1a1605",
+    bgFloor: "#332b0a",
+  },
+  courtmage: {
+    name: "宮廷魔法師",
+    title: "CHAPTER 5 · 「公平・公正・公開」的資質檢測官",
+    color: "#a855f7",
+    secondary: "#22c55e",
+    belt: "#2e1065",
+    headband: "#22c55e",
+    visualType: "mage",
+    hp: 620,
+    atkMul: 1.38,
+    speed: 4.6,
+    jumpForce: 13.2,
+    aggr: 0.7,
+    block: 0.42,
+    specialName: "FAILED 判定光彈",
+    upperName: "資質檢測・強制重測",
+    dashName: "黑箱瞬移",
+    superName: "宮廷禁咒・廢物認證",
+    bgTop: "#04160e",
+    bgFloor: "#0a291c",
+  },
   admin: {
     name: "Administrator",
     title: "FINAL BOSS · C:\\mato\\AIclub.exe",
@@ -226,6 +269,8 @@ const STAGE_OF: Record<string, string> = {
   skyisle: "skyisle",
   demonlord: "demon",
   admin: "core",
+  knight: "skyisle",
+  courtmage: "core",
 };
 
 export function StoryBattleArena({
@@ -1108,8 +1153,7 @@ export function StoryBattleArena({
         (!isLowAttack || defender.state === "crouch");
 
       if (canBlock) {
-        const chipDamage = Math.max(2, Math.round(rawDamage * 0.15));
-        defender.hp = Math.max(1, defender.hp - chipDamage);
+        // 格擋成功：完全不扣血（只有不可格擋的招式與 Boss 機關會打穿防禦）
         defender.state = "block";
         defender.stateTimer = 12;
         defender.vx = -defender.facing * (knockbackX * 0.55);

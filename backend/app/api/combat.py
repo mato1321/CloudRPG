@@ -93,8 +93,10 @@ def start(req: StartReq, user: User = Depends(get_current_user), db: Session = D
         inv = p.get("inv", {})
         if key == "demonlord" and not all(inv.get(s) for s in ("stone_red", "stone_blue", "stone_gold")):
             raise HTTPException(status_code=403, detail="需要集齊三顆傳說之石")
-        if key == "admin" and "demonlord" not in p.get("bossesDefeated", []):
+        if key in ("admin", "knight", "courtmage") and "demonlord" not in p.get("bossesDefeated", []):
             raise HTTPException(status_code=403, detail="擊敗魔王後解鎖")
+        if key == "courtmage" and not inv.get("memory_1"):
+            raise HTTPException(status_code=403, detail="先打倒騎士團長，取得記憶碎片・壹")
         base = D.ENEMIES[key]
         enemy = {"key": key, "name": base["name"], "hp": base["hp"], "atkScale": 1.0, "speedScale": 1.0, "modifiers": []}
         ref = None

@@ -402,8 +402,16 @@ def tower_floor(seed: int, floor: int) -> dict:
         key = rng.choice(pool)
     n_mods = 0 if floor <= 2 else 1 if floor <= 6 else 2 if floor <= 14 else 3
     mods = rng.sample(list(D.MODIFIERS), k=n_mods)
-    enemy = _scaled_enemy(key, 1 + 0.15 * (floor - 1), 1 + 0.07 * (floor - 1), mods)
-    enemy["boss"] = floor % 5 == 0
+    # 第 10 層之後成長更快；Boss 層額外加強
+    late = max(0, floor - 10)
+    hp_mul = 1 + 0.15 * (floor - 1) + 0.10 * late
+    atk_mul = 1 + 0.07 * (floor - 1) + 0.03 * late
+    boss = floor % 5 == 0
+    if boss:
+        hp_mul *= D.TOWER_BOSS_HP
+        atk_mul *= D.TOWER_BOSS_ATK
+    enemy = _scaled_enemy(key, hp_mul, atk_mul, mods)
+    enemy["boss"] = boss
     return enemy
 
 

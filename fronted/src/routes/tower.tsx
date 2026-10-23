@@ -121,7 +121,7 @@ function TowerPage() {
                   <ModifierChips mods={run.next.modifiers} info={MOD_INFO} />
                 </div>
                 <div className="text-[12px] text-[#7be0a8]">
-                  已獲得祝福：ATK +{12 * (run.buffs?.power || 0)}%{run.buffs?.energy ? " · 開場氣條 +40%" : ""}
+                  已獲得祝福：ATK +{12 * (run.buffs?.power || 0)}%（上限 +{12 * (run.powerMax || 3)}%）{run.buffs?.energy ? " · 開場氣條 +40%" : ""}
                 </div>
                 <div className="flex gap-2">
                   <button onClick={() => setFighting(true)} className="crpg-panel px-6 py-2 text-[#00ff88] crpg-glow border-[#00ff88]/60 font-bold">

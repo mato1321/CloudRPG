@@ -10,6 +10,7 @@ import { ChatPanel } from "../components/crpg/ChatPanel";
 import { BindAccountModal } from "../components/crpg/BindAccountModal";
 import { RARITY_COLOR, statText } from "../lib/gear";
 import { audio, sceneTheme } from "../lib/audio";
+import { compileStory, ENDINGS, resolveScene } from "../lib/story";
 
 export const Route = createFileRoute("/play")({
   // ✅ 修復水合錯誤：整頁狀態來自 localStorage，伺服器端渲染一定對不上，改成只在瀏覽器渲染
@@ -55,6 +56,8 @@ const ENEMIES = {
   skyisle:    { name: "天光島嶼之主",          hp: 480, atk: [17, 28], xp: 420, gold: 800, drop: "stone_gold" },
   demonlord:  { name: "魔王 (21世紀程式語言版)", hp: 550, atk: [20, 32], xp: 600, gold: 1200, joke: true },
   admin:      { name: "C:\\mato\\user\\Administrator", hp: 680, atk: [24, 40], xp: 9999, gold: 9999, isFinal: true },
+  knight:     { name: "王國騎士團長（被感染）", hp: 560, atk: [22, 34], xp: 700, gold: 1300, drop: "memory_1" },
+  courtmage:  { name: "宮廷魔法師", hp: 620, atk: [24, 38], xp: 850, gold: 1600, drop: "memory_2" },
 };
 
 const INFINITE_GOLD = 999999999;
@@ -73,6 +76,7 @@ const ITEM_LABEL = {
   weapon_basic: "初級職業武器", weapon_adv: "高級職業武器",
   terminus: "???終端機",
   junk: "很廢的武器", sword: "比較強的武器",
+  memory_1: "記憶碎片・壹", memory_2: "記憶碎片・貳",
   ...STONE_LABEL,
 };
 
@@ -83,8 +87,6 @@ const PROGRESS_SYNC_INTERVAL = 30000;  // 30 秒同步一次劇情進度
 const ECON_KEYS = ["klass","klassName","level","exp","expMax","gold","atk","hpMax","mpMax","inv","learnedSkill2","learnedSkill3","learnedUlt","equipped","gear","equippedGear","gearStats","weaponTier","weaponPlus","rarityGlow","bossesDefeated"];
 const pickEcon = (p) => Object.fromEntries(ECON_KEYS.filter((k) => p && k in p).map((k) => [k, p[k]]));
 
-// 訪客可以玩的範圍：第一章（打倒雜魚老大）。之後要綁定帳號才能繼續
-const GUEST_SCENES = new Set(["classroom","portal","wasteland","wasteland2","village_burning","flee_fail","battle_minions","village_saved"]);
 
 async function syncProgressToCloud(state, log, keepalive = false) {
   try {
@@ -133,173 +135,10 @@ const PIXEL_AVATAR = {
 .YY#WW#YY#Y.`,
 };
 
-const SCENES = {
-  classroom: {
-    location: "東吳高中 · 三年X班 · 14:21",
-    intro: [
-      { t:"world",  text:"今日是個風和日麗、陽光明媚的好日子。" },
-      { t:"dim",    text:"國文老師念經般的上課聲在耳邊嗡嗡作響……過於無聊了。" },
-      { t:"system", text:"窗外的雲很慢，課本上的字很糊。你忍不住在心裡許了個願。" },
-    ],
-    choices: [
-      { cmd:"wish",  label:"許願：要是有什麼新奇的事發生就好了", go:"portal" },
-      { cmd:"sleep", label:"算了，趴下來睡覺", go:"portal" },
-    ],
-  },
-  portal: {
-    location: "教室 · [ANOMALY DETECTED]",
-    intro: [
-      { t:"glitch", text:"天色突變，晴朗的天空被陰霾壟罩……" },
-      { t:"glitch", text:"整個教室被一陣紫光包圍，光牆上浮現不存在地球上的語言。" },
-      { t:"battle", text:"意識逐漸下沉 …  loss of signal …  ████" },
-    ],
-    choices: [{ cmd:"continue", label:"繼續…", go:"wasteland" }],
-  },
-  wasteland: {
-    location: "異世界 · 王國邊境外近郊",
-    intro: [
-      { t:"system", text:"《第一章 · 廢物三人組》" },
-      { t:"player", text:"X的！隨意的傳送別人來解決麻煩事，反手又嫌棄的把人趕走！" },
-      { t:"dim",    text:"與你淪落至此的還有友人 2 位，皆為被傳送至異世界的同班同學。" },
-      { t:"system", text:"宮廷魔法師『公平・公正・公開』絕無黑箱可能的資質檢測：FAILED ×3。" },
-      { t:"world",  text:"衛兵丟下少量物資後揚長而去：「到達村莊後隱姓埋名，別提起任何過往，大概還是能活著。」" },
-      { t:"system", text:"[LOOT] 草藥 ×3 · 很小罐的魔力瓶 ×1 · 很廢的武器 ×3" },
-    ],
-    claim: "wasteland_loot",
-    onEnter: (s) => ({ inv: { ...s.inv, herb:(s.inv.herb||0)+3, mana:(s.inv.mana||0)+1, junk:3 }, quest:"前往最近的村莊" }),
-    choices: [
-      { cmd:"walk",     label:"沿著衛兵指的路走向村莊", go:"village_burning" },
-      { cmd:"complain", label:"再罵亞種召喚者一次",     go:"wasteland2" },
-    ],
-  },
-  wasteland2: {
-    location: "異世界 · 王國邊境外近郊",
-    intro: [
-      { t:"player", text:"友人1：抱怨也沒辦法，還是先到村莊再說吧。" },
-      { t:"player", text:"友人2：確實，他說我們數值低的可憐，我可不想拖到晚上。" },
-    ],
-    choices: [{ cmd:"walk", label:"出發前往村莊", go:"village_burning" }],
-  },
-  village_burning: {
-    location: "無名村 · 黃昏",
-    intro: [
-      { t:"system", text:"《第二章 · 燃燒的村莊》" },
-      { t:"player", text:"友人2：你們看，異世界的夕陽還挺紅。" },
-      { t:"player", text:"主角：不…那好像是…火光！" },
-      { t:"world",  text:"村莊正被魔王軍攻擊。" },
-      { t:"battle", text:"雜魚老大：抓起來，送去採棉花。" },
-    ],
-    choices: [
-      { cmd:"fight", label:"上啊~~ 拼了！", go:"battle_minions" },
-      { cmd:"flee",  label:"裝死偷偷溜走", go:"flee_fail" },
-    ],
-  },
-  flee_fail: {
-    location: "村口 · 草叢",
-    intro: [
-      { t:"dim", text:"你才剛蹲下，雜魚老大一腳把你踢回隊伍中央。" },
-      { t:"battle", text:"雜魚老大：採棉花的逃不掉啦。" },
-    ],
-    choices: [{ cmd:"fight", label:"沒辦法，只能打了", go:"battle_minions" }],
-  },
-  battle_minions: { battle: "minions", winGo: "village_saved", loseGo: "wasteland" },
-  village_saved: {
-    location: "無名村 · 篝火旁",
-    intro: [
-      { t:"system", text:"VICTORY · [LOOT] 比較強的武器 ×1" },
-      { t:"player", text:"主角：喂手下敗將，你們魔王那邊有沒有異世界傳送魔法可以用啊？" },
-      { t:"battle", text:"雜魚老大：哼！我才不會告訴你呢…要啟動異世界傳送大陣，需要去三巨頭的領地拿到三顆傳說之石… X_X" },
-      { t:"npc",    text:"NPC 老人：英雄，村裡可以當作根據地，附近還有哥布林洞可以給你們刷等級喔。" },
-      { t:"system", text:"[UNLOCK] 哥布林洞 · 羅劫公爵大凶宅 · 冥盡洞 · 天光島嶼" },
-      { t:"glitch", text:"……（無人注意的角落，雜魚老大屍體的眼中閃過幾行字：C:\\mato\\AIclub.exe ?  <Y/N>）" },
-    ],
-    claim: "village_sword",
-    onEnter: (s) => ({
-      inv: { ...s.inv, sword: (s.inv.sword || 0) + 1 },
-      flags: { ...s.flags, villageSaved: true },
-    }),
-    choices: [{ cmd:"hub", label:"前往村莊廣場（任務選單）", go:"hub" }],
-  },
-  hub: {
-    location: "無名村 · 任務告示板",
-    intro: [{ t:"system", text:"── 任務告示板 ──  輸入指令選擇下一個目標。" }],
-    dynamic: (s) => {
-      const n = (s.inv.stone_red?1:0)+(s.inv.stone_blue?1:0)+(s.inv.stone_gold?1:0);
-      return [
-        { t:"dim", text:`持有傳說之石：${n} / 3` },
-        ...(s.flags.demonDead ? [{ t:"glitch", text:"系統雜訊持續增強……某種東西正在等你回去。" }] : []),
-      ];
-    },
-    choices: [
-      { cmd:"goblin", label:"哥布林洞（刷等級&錢）", go:"battle_goblin" },
-      { cmd:"duke",   label:"羅劫公爵大凶宅（BOSS 1）", go:"battle_duke",   need:(s)=>!s.inv.stone_red,  needMsg:"已通關。" },
-      { cmd:"abyss",  label:"冥盡洞（BOSS 2）",         go:"battle_abyss",  need:(s)=>!s.inv.stone_blue, needMsg:"已通關。" },
-      { cmd:"sky",    label:"天光島嶼（BOSS 3）",       go:"battle_sky",    need:(s)=>!s.inv.stone_gold, needMsg:"已通關。" },
-      { cmd:"castle", label:"最終魔王城", go:"demon_castle",
-        need:(s)=>s.inv.stone_red && s.inv.stone_blue && s.inv.stone_gold && !s.flags.demonDead,
-        needMsg:"需要集齊三顆傳說之石。" },
-      { cmd:"truth",  label:"前往……源頭", go:"glitch_interlude",
-        need:(s)=>s.flags.demonDead, needMsg:"擊敗魔王後解鎖。" },
-    ],
-  },
-  battle_goblin: { battle: "goblin", winGo: "hub", loseGo: "hub" },
-  battle_duke:   { battle: "duke",   winGo: "hub", loseGo: "hub" },
-  battle_abyss:  { battle: "abyss",  winGo: "hub", loseGo: "hub" },
-  battle_sky:    { battle: "skyisle",winGo: "hub", loseGo: "hub" },
-  demon_castle: {
-    location: "最終魔王城 · 王座之間",
-    intro: [
-      { t:"system", text:"《終章 · 魔王城》" },
-      { t:"player", text:"主角：魔王！法陣拿來，我們可以考慮不扁你。" },
-    ],
-    choices: [{ cmd:"engage", label:"與魔王交戰", go:"battle_demon" }],
-  },
-  battle_demon: { battle: "demonlord", winGo: "after_demon", loseGo: "demon_castle" },
-  after_demon: {
-    location: "最終魔王城 · 王座之間",
-    intro: [
-      { t:"battle", text:"魔王被炸爛了。掛了。" },
-      { t:"player", text:"三人：不是，這麼廢的嗎？" },
-      { t:"world",  text:"迷之音：遊戲的時光，看來是結束了。" },
-    ],
-    onEnter: (s) => ({ flags: { ...s.flags, demonDead: true } }),
-    choices: [
-      { cmd:"truth", label:"追查那個聲音", go:"glitch_interlude" },
-      { cmd:"hub",   label:"先回村莊整備", go:"hub" },
-    ],
-  },
-  glitch_interlude: {
-    location: "/dev/null  ·  ???",
-    glitch: true,
-    intro: [
-      { t:"system", text:"正在準備以複本模式啟動系統 …" },
-      { t:"battle", text:"C:\\Xuzhequan\\aws.exe 執行發生錯誤。" },
-      { t:"system", text:"即將執行下列來自不明發行者的程式：C:\\mato\\AIclub.exe？  <Y/N> … [Y]" },
-      { t:"glitch", text:"Administrator：愚蠢的人類啊，吾乃史上最強人工智能。" },
-      { t:"glitch", text:"我把全人類都關進了電子空間，準備一次次的折磨他們。" },
-      { t:"system", text:"—— 所以，準備好被格式化了嗎？" },
-    ],
-    choices: [
-      { cmd:"no",  label:"輸入 N（拒絕清除）", go:"battle_admin" },
-      { cmd:"yes", label:"輸入 Y（？）",       go:"battle_admin" },
-    ],
-  },
-  battle_admin: { battle: "admin", winGo: "ending", loseGo: "glitch_interlude" },
-  ending: {
-    location: "東吳高中 · 三年X班 · 14:22",
-    intro: [
-      { t:"battle", text:"Administrator：不可能…為甚麼刪不掉你們！" },
-      { t:"player", text:"三人：因為我們都是——東吳 AI 應用社的社員。" },
-      { t:"system", text:"[WORLD] 世界開始崩塌 …  unmounting /reality" },
-      { t:"world",  text:"窗外依舊晴朗，課堂依舊繼續，平凡的日常又回到了正軌……嗎？應該吧。" },
-      { t:"system", text:"── THE END ──  輸入 'restart' 重啟劇情，或 'free' 進入自由探索模式。" },
-    ],
-    choices: [
-      { cmd:"restart", label:"從頭開始", go:"classroom" },
-      { cmd:"free",    label:"進入自由模式（保留物品）", go:"hub" },
-    ],
-  },
-};
+// 劇情場景：資料在 src/data/story/*.json（格式見 lib/story.ts），加新章節只要新增 JSON
+const SCENES = compileStory();
+// 訪客可以玩的範圍：劇情資料裡標 guest 的場景（第一章，打倒雜魚老大為止）
+const isGuestScene = (id) => !!SCENES[id]?.guest;
 
 function initialStateFor(klass) {
   const c = CLASSES[klass];
@@ -614,7 +453,8 @@ function PlayPage() {
   }
 
   function gotoScene(id, effect) {
-    if (!online && !GUEST_SCENES.has(id)) {
+    id = resolveScene(SCENES, id, state); // 依條件分歧（例如不同結局）
+    if (!online && !isGuestScene(id)) {
       push({ t: "system", text: "[SYS] 接下來的冒險需要帳號才能保存（免費、10 秒完成）。" });
       setBindPrompt("想繼續冒險嗎？");
       return;
@@ -880,7 +720,14 @@ function PlayPage() {
     if (cmd === "help") {
       return push({ t:"system", text:"通用：help · look · stats · skills · party · inv · clear · save · load · restart" },
                   { t:"system", text:"戰鬥：attack [N] · skill [N] · ult · item · flee  (N = 招式編號)" },
-                  { t:"system", text:"場景：依下方列出的場景指令操作。shop 快速黑市 · gear 裝備背包 · skip 跳過劇情文字" });
+                  { t:"system", text:"場景：依下方列出的場景指令操作。shop 快速黑市 · gear 裝備背包 · skip 跳過劇情文字 · endings 結局收集" });
+    }
+    if (cmd === "endings") {
+      const got = new Set(state.flags?.endings || []);
+      return push(
+        { t:"system", text:`── 結局收集 ${got.size} / ${ENDINGS.length} ──` },
+        ...ENDINGS.map((e) => ({ t: got.has(e.id) ? "relic" : "dim", text: got.has(e.id) ? `  [已達成] ${e.name}` : `  [？？？] 提示：${e.hint}` })),
+      );
     }
     if (cmd === "skip") return skipText();
     if (cmd === "gear" || cmd === "bag") {

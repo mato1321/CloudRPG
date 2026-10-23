@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.core.deps import _user_from_header, get_current_user, get_optional_user
 from app.core.monitoring import capture_client_error
-from app.duel import Player, duels, safe_send, start_payload
+from app.duel import Player, broadcast_lobby, broadcast_start, duels, safe_send
 from app.core.ratelimit import client_ip, enforce, limiter
 from app.db.database import SessionLocal, get_db
 from app.game import services as S
@@ -155,16 +155,17 @@ async def duel_ws(ws: WebSocket, token: Optional[str] = None):
             if now - window > 1:
                 window, count = now, 0
             count += 1
-            if count > 90 or len(raw) > 20000:  # 每秒最多 90 則（30 次畫面 + 按鍵），超過的丟掉
+            if count > 140 or len(raw) > 30000:  # 每秒最多 140 則（約 47 次畫面 + 按鍵），超過的丟掉
                 continue
             room = me.room
-            # 熱路徑：畫面狀態直接原文轉送，不重新解析
+            # 熱路徑：房主的畫面狀態直接原文轉送給其他人，不重新解析
             if raw.startswith('{"t":"st"'):
-                if room and room.host is me and room.guest:
-                    try:
-                        await room.guest.ws.send_text(raw)
-                    except Exception:
-                        pass
+                if room and room.host is me:
+                    for q in room.others(me):
+                        try:
+                            await q.ws.send_text(raw)
+                        except Exception:
+                            pass
                 continue
             if raw == "ping":
                 await ws.send_json({"t": "pong"})
@@ -174,33 +175,49 @@ async def duel_ws(ws: WebSocket, token: Optional[str] = None):
             except ValueError:
                 continue
             t = msg.get("t")
-            if t == "in" and room and room.guest is me:
-                await safe_send(room.host, {"t": "in", "c": str(msg.get("c", ""))[:16], "d": 1 if msg.get("d") else 0})
+            if t == "in" and room and room.host is not me:
+                out = {"t": "in", "s": room.slot(me), "c": str(msg.get("c", ""))[:16], "d": 1 if msg.get("d") else 0}
+                if msg.get("h") is not None:  # 定期同步「現在按住哪些移動鍵」，補回漏掉的按鍵
+                    out["h"] = str(msg.get("h"))[:40]
+                await safe_send(room.host, out)
             elif t in ("create", "join", "queue"):
                 me.fighter = duels.clean_fighter(msg.get("fighter"))
                 if t == "create":
-                    room = await duels.create(me, msg.get("stage"))
-                    await ws.send_json({"t": "created", "code": room.code})
-                    continue
-                room = await (duels.join(me, msg.get("code")) if t == "join" else duels.quick(me, msg.get("stage")))
-                if not room:
-                    await ws.send_json({"t": "error", "msg": "找不到這個房間，或房間已經滿了"} if t == "join" else {"t": "waiting"})
-                    continue
-                room.started = True
-                await safe_send(room.host, start_payload(room, "host"))
-                await safe_send(room.guest, start_payload(room, "guest"))
+                    room = await duels.create(me, msg.get("kind", "duel"), msg.get("stage"))
+                elif t == "join":
+                    room = await duels.join(me, msg.get("code"))
+                    if not room:
+                        await ws.send_json({"t": "error", "msg": "找不到這個房間，或房間已滿 / 已開打"})
+                        continue
+                else:
+                    room = await duels.quick(me, msg.get("stage"))
+                    if not room:
+                        await ws.send_json({"t": "waiting"})
+                        continue
+                await broadcast_lobby(room)
+            elif t == "pick" and room and not room.started:
+                if msg.get("fighter"):
+                    me.fighter = duels.clean_fighter(msg.get("fighter"))
+                if "stage" in msg and room.host is me:
+                    room.stage = duels.clean_stage(msg.get("stage"))
+                await broadcast_lobby(room)
+            elif t == "go" and room and room.host is me and len(room.players) >= 2 and not room.started:
+                await broadcast_start(room)
             elif t == "cancel":
                 await duels.leave(me)
                 await ws.send_json({"t": "idle"})
-            elif t == "end" and room and room.host is me and room.guest and not room.reported:
+            elif t == "end" and room and room.host is me and room.started and not room.reported:
                 room.reported = True
                 room.matches += 1
-                winner = "host" if msg.get("winner") == "host" else "guest"
-                await asyncio.to_thread(_record_duel, room.host.user_id, room.guest.user_id, winner == "host")
-                await safe_send(room.guest, {"t": "end", "winner": winner})
-            elif t == "rematch" and room and room.host is me and room.guest:
-                room.reported = False
-                await safe_send(room.guest, {"t": "rematch"})
+                result = msg.get("result") if isinstance(msg.get("result"), dict) else {}
+                if room.kind == "duel" and len(room.players) == 2:
+                    host_won = msg.get("winner") == "host"
+                    await asyncio.to_thread(_record_duel, room.host.user_id, room.players[1].user_id, host_won)
+                    result = {"winner": "host" if host_won else "guest"}
+                for q in room.others(me):
+                    await safe_send(q, {"t": "end", "result": result})
+                room.started = False
+                await broadcast_lobby(room)
     except WebSocketDisconnect:
         pass
     except Exception:

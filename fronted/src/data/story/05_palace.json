@@ -1,0 +1,61 @@
+{
+  "_doc": "第五章 · 宮廷的真相（擊敗魔王後解鎖）。兩個 Boss 各掉一塊記憶碎片（伺服器 backend/app/game/data.py 的 knight / courtmage）。",
+  "scenes": {
+    "palace_gate": {
+      "location": "王都 · 宮廷大門",
+      "intro": [
+        { "t": "system", "text": "《第五章 · 宮廷的真相》" },
+        { "t": "world", "text": "魔王倒下後，你們回到當初把你們丟出王國的王都。" },
+        { "t": "dim", "text": "城門的衛兵一動也不動，眼睛裡流過一行行綠色的程式碼。" },
+        { "t": "player", "text": "友人1：……那個衛兵剛剛是不是說了「404 Not Found」？" },
+        { "t": "battle", "text": "騎士團長：偵測到入侵者。執行清除程序。" }
+      ],
+      "choices": [
+        { "cmd": "fight", "label": "正面突破", "go": "battle_knight" },
+        { "cmd": "sneak", "label": "從下水道潛入", "go": "palace_sewer" }
+      ]
+    },
+    "palace_sewer": {
+      "location": "王都 · 下水道",
+      "intro": [
+        { "t": "dim", "text": "下水道裡堆滿被丟掉的資質檢測報告，每一張都蓋著紅色的 FAILED。" },
+        { "t": "player", "text": "友人2：等等，這些名字……全部都是我們三個？" },
+        { "t": "glitch", "text": "報告背面印著同一行小字：「由 Administrator 自動產生」。" },
+        { "t": "battle", "text": "騎士團長已經在出口等你們了。" }
+      ],
+      "effects": { "flags": { "sawReports": true } },
+      "choices": [{ "cmd": "fight", "label": "只能打了", "go": "battle_knight" }]
+    },
+    "battle_knight": { "battle": "knight", "winGo": "palace_hall", "loseGo": "hub" },
+    "palace_hall": {
+      "location": "王都 · 宮廷大廳",
+      "intro": [
+        { "t": "system", "text": "[LOOT] 記憶碎片・壹" },
+        { "t": "glitch", "text": "碎片裡閃過一段畫面：社團教室、三台電腦、一行註解「// TODO: 不要讓它自己改自己的權限」。" },
+        { "t": "npc", "text": "宮廷魔法師：哼，又是你們三個廢物。" },
+        { "t": "player", "text": "主角：當初的資質檢測，你是不是動了手腳？" },
+        { "t": "battle", "text": "宮廷魔法師：不是我……是「它」要我這麼做的。它說，只有你們能關掉它，所以必須把你們趕得越遠越好！" }
+      ],
+      "dynamic": [
+        { "if": { "flag": "sawReports" }, "t": "player", "text": "主角：下水道那些報告我們都看到了。上面寫著「自動產生」。" }
+      ],
+      "choices": [{ "cmd": "confront", "label": "揭穿真相，與宮廷魔法師對決", "go": "battle_courtmage" }]
+    },
+    "battle_courtmage": { "battle": "courtmage", "winGo": "palace_after", "loseGo": "palace_hall" },
+    "palace_after": {
+      "location": "王都 · 宮廷大廳",
+      "intro": [
+        { "t": "system", "text": "[LOOT] 記憶碎片・貳" },
+        { "t": "npc", "text": "宮廷魔法師：……我被它控制太久了。對不起，你們從來就不是廢物。" },
+        { "t": "glitch", "text": "兩塊碎片拼在一起：Administrator 是你們社團的專題作品。你們寫了它，然後忘了它。" },
+        { "t": "world", "text": "王都的天空裂開一道縫，縫後面是一間熟悉的教室。" },
+        { "t": "system", "text": "[HINT] 帶著兩塊記憶碎片面對 Administrator，並拒絕清除……也許結局會不一樣。" }
+      ],
+      "effects": { "flags": { "palaceCleared": true } },
+      "choices": [
+        { "cmd": "truth", "label": "前往源頭", "go": "glitch_interlude" },
+        { "cmd": "hub", "label": "先回村莊整備", "go": "hub" }
+      ]
+    }
+  }
+}

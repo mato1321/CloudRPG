@@ -7,6 +7,7 @@ import { TouchControls, ARENA_BUTTONS } from "../components/crpg/TouchControls";
 import { audio } from "../lib/audio";
 import { useAudioSettings, useTheme } from "../lib/useAudio";
 import { DuelPanel } from "../components/crpg/DuelPanel";
+import { api } from "../lib/api";
 
 /* 線上對戰：對手送過來的按鍵（用自己的 WASD + FGRTYQ / JKLUOI）在房主這邊操作 2P */
 const REMOTE_ATTACK: Record<string, string> = {
@@ -14,6 +15,11 @@ const REMOTE_ATTACK: Record<string, string> = {
   KeyT: "shoryuken", KeyU: "shoryuken", KeyY: "dash", KeyO: "dash", KeyQ: "super", KeyI: "super",
 };
 const NET_KEYS = new Set([...Object.keys(REMOTE_ATTACK), "KeyA", "KeyD", "KeyW", "KeyS"]);
+const isNet = (g: any) => !!g && (g.mode === "online" || g.mode === "coop");
+
+/* 組隊共鬥：世界 Boss 對應的場地與隊員站位 */
+const COOP_STAGE: Record<string, string> = { duke: "mansion", abyss: "abyss", skyisle: "skyisle", demonlord: "demon", admin: "core" };
+const COOP_X = [150, 240, 330, 420];
 
 /** 送給對手的精簡狀態：只留數值 / 字串欄位（cfg 雙方各自用角色 id 建立，粒子特效對手自己產生） */
 function netFields(o: any) {
@@ -207,20 +213,57 @@ const sfx = new ArcadeAudio();
 function ArenaPage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  const [mode, setMode] = useState<"cpu" | "pvp" | "online">("pvp");
+  const [mode, setMode] = useState<"cpu" | "pvp" | "online" | "coop">("pvp");
   const [matchKey, setMatchKey] = useState(0); // 每場線上對戰開始時 +1，讓引擎重新開局
   const netRef = useRef<any>(null); // { role: "host" | "guest", client, names }
   const [showOnline, setShowOnline] = useState(false);
-  const online = mode === "online";
+  // /arena?coop=1：從世界 Boss 頁進來的組隊討伐
+  // 掛載後才讀網址：SSR 時沒有 window，直接在初始值讀會造成水合不一致（React #418）
+  const [coopMode, setCoopMode] = useState(false);
+  useEffect(() => setCoopMode(new URLSearchParams(window.location.search).get("coop") === "1"), []);
+  const online = mode === "online" || mode === "coop";
 
-  function startOnline(m: any, client: any) {
-    netRef.current = { role: m.role, client, names: { p1: m.host.name, p2: m.guest.name } };
-    setP1Pick(m.host.fighter);
-    setP2Pick(m.guest.fighter);
+  async function startOnline(m: any, client: any) {
+    const role = m.you === 0 ? "host" : "guest";
+    const scroll = () => setTimeout(() => canvasRef.current?.scrollIntoView({ block: "center", behavior: "smooth" }), 200);
+    if (m.kind === "coop") {
+      // 每個人各自拿世界 Boss 的戰鬥憑證：獎勵各自結算，伺服器照樣限制每個人的傷害上限
+      const b = await api("/api/battle/start", { body: { mode: "worldboss" } });
+      const boss = { key: b.enemy.key, name: b.enemy.name, hp: b.enemy.raid?.hp ?? b.enemy.hp, hpMax: b.enemy.raid?.hpMax ?? b.enemy.hp };
+      netRef.current = {
+        role, client, kind: "coop", you: m.you,
+        names: { p1: m.players[0].name, p2: "世界 BOSS" },
+        coop: { players: m.players, boss, timeLimit: b.enemy.timeLimit || 45, battleId: b.battle_id, startedAt: performance.now() },
+      };
+      setMode("coop");
+      setMatchKey((k) => k + 1);
+      scroll();
+      return;
+    }
+    netRef.current = { role, client, kind: "duel", you: m.you, names: { p1: m.players[0].name, p2: m.players[1]?.name } };
+    setP1Pick(m.players[0].fighter);
+    setP2Pick(m.players[1]?.fighter || "warrior_rpg");
     setStageIdx(m.stage || 0);
     setMode("online");
     setMatchKey((k) => k + 1);
-    setTimeout(() => canvasRef.current?.scrollIntoView({ block: "center", behavior: "smooth" }), 200);
+    scroll();
+  }
+
+  /** 組隊共鬥結束：用房主算出的「我的傷害」結算自己的戰鬥憑證（伺服器會再限制上限） */
+  async function finishCoop(result: any) {
+    const net = netRef.current;
+    const co = net?.coop;
+    if (!co || co.finished) return null;
+    co.finished = true;
+    const mine = Math.max(0, Math.round(result?.damage?.[net.you] || 0));
+    try {
+      const r = await api("/api/battle/finish", {
+        body: { battle_id: co.battleId, win: true, duration_ms: Math.round(performance.now() - co.startedAt), damage: mine },
+      });
+      return { mine, dealt: r.extra?.raid?.dealt ?? mine, gold: r.rewards?.gold || 0, xp: r.rewards?.xp || 0, killed: !!result?.killed };
+    } catch (e: any) {
+      return { mine, error: e.message };
+    }
   }
 
   function stopOnline() {
@@ -285,6 +328,7 @@ function ArenaPage() {
     customStage = stageIdx,
     customDiff = aiDiffId
   ) {
+    if (customMode === "coop") return startCoopMatch();
     const f1 = FIGHTERS.find((f) => f.id === customP1) || FIGHTERS[0];
     const f2 = FIGHTERS.find((f) => f.id === customP2) || FIGHTERS[1];
     const stg = STAGES[customStage] || STAGES[0];
@@ -323,9 +367,42 @@ function ArenaPage() {
       p1: createFighterEntity(f1, 200, 1, false, diffObj),
       p2: createFighterEntity(f2, 700, -1, customMode === "cpu", diffObj),
     };
+    gameRef.current.allies = [];
+    gameRef.current.p1.slot = 0;
+    if (customMode === "online") gameRef.current.p2.slot = 1;
     setMatchStateText(
       `[${customMode === "online" ? "線上即時對戰" : customMode === "pvp" ? "雙人同鍵盤對戰" : "單人 VS 電腦"}] ${f1.name} VS ${f2.name}`
     );
+  }
+
+  function startCoopMatch() {
+    const co = netRef.current?.coop;
+    if (!co) return;
+    const diffObj = AI_DIFFICULTIES.find((d) => d.id === "master") || AI_DIFFICULTIES[AI_DIFFICULTIES.length - 1];
+    const pick = (i: number) => FIGHTERS.find((f) => f.id === co.players[i].fighter) || FIGHTERS[0];
+    const team = co.players.map((_: any, i: number) => {
+      const f = createFighterEntity(pick(i), COOP_X[i] || 150, 1, false, diffObj);
+      f.slot = i;
+      return f;
+    });
+    const base = FIGHTERS.find((f) => f.id === "admin_boss") || FIGHTERS[0];
+    const boss = createFighterEntity(
+      { ...base, id: `wb_${co.boss.key}`, name: co.boss.name, title: "世界 BOSS", visualType: co.boss.key, hp: co.boss.hpMax, atkMul: 1.35 },
+      760, -1, true, diffObj
+    );
+    boss.hp = co.boss.hp;
+    boss.trailHp = co.boss.hp;
+    boss.hpMax = co.boss.hpMax;
+    gameRef.current = {
+      mode: "coop", stage: STAGES[0], diffObj, round: 1, p1Wins: 0, p2Wins: 0, timer: co.timeLimit,
+      frameCounter: 0, hitStop: 0, screenShake: 0, superFlash: 0, phase: "intro", phaseTimer: 70,
+      bannerText: co.boss.name, subBannerText: `組隊討伐：${co.players.map((p: any) => p.name).join("、")}`,
+      winner: null, projectiles: [], particles: [], floatingTexts: [], fx: [], hitFlash: 0, cutIn: null,
+      stageKey: COOP_STAGE[co.boss.key] || "core", labels: netRef.current.names,
+      p1: team[0], allies: team.slice(1), p2: boss,
+      coop: { ticks: Math.round((co.timeLimit * 1000) / 21), damage: co.players.map(() => 0), names: co.players.map((p: any) => p.name), you: netRef.current.you },
+    };
+    setMatchStateText(`[組隊討伐] ${co.players.map((p: any) => p.name).join(" / ")} VS ${co.boss.name}`);
   }
 
   function resetRound(g: any) {
@@ -335,6 +412,8 @@ function ArenaPage() {
     const p2Energy = g.p2.energy;
     g.p1 = createFighterEntity(f1, 200, 1, false, g.diffObj);
     g.p2 = createFighterEntity(f2, 700, -1, g.mode === "cpu", g.diffObj);
+    g.p1.slot = 0;
+    if (g.mode === "online") g.p2.slot = 1;
     g.p1.energy = Math.min(100, p1Energy + 25);
     g.p2.energy = Math.min(100, p2Energy + 25);
     g.projectiles = [];
@@ -353,7 +432,20 @@ function ArenaPage() {
     startNewMatch(mode, p1Pick, p2Pick, stageIdx, aiDiffId);
 
     const keys = new Set<string>();
-    const remoteKeys = new Set<string>(); // 線上對戰：房主這邊收到的對手按鍵
+    const remote = new Map<number, Set<string>>(); // 線上：房主這邊收到的各 slot 按鍵
+    const rk = (slot: number) => {
+      let set = remote.get(slot);
+      if (!set) remote.set(slot, (set = new Set<string>()));
+      return set;
+    };
+    /** 某個角色現在有沒有按住某個方向：房主自己用本機鍵盤，其他人用遠端按鍵，本機雙人的 2P 用方向鍵 */
+    const held = (g: any, f: any, dir: "L" | "R" | "U" | "D") => {
+      const wasd = { L: "KeyA", R: "KeyD", U: "KeyW", D: "KeyS" }[dir];
+      if (f === g.p1) return keys.has(wasd);
+      if (isNet(g) && f.slot >= 1) return rk(f.slot).has(wasd);
+      return keys.has({ L: "ArrowLeft", R: "ArrowRight", U: "ArrowUp", D: "ArrowDown" }[dir]);
+    };
+    const slotFighter = (g: any, slot: number) => (g.mode === "coop" ? g.allies?.[slot - 1] : slot === 1 ? g.p2 : null);
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", " "].includes(e.key)) {
@@ -364,8 +456,8 @@ function ArenaPage() {
 
       const code = e.code;
       const net = netRef.current;
-      if (gameRef.current?.mode === "online" && net?.role === "guest") {
-        // 線上對戰的對手：按鍵送給房主，自己不模擬
+      if (isNet(gameRef.current) && net?.role === "guest") {
+        // 線上：非房主的玩家把按鍵送給房主，自己不模擬
         if (!keys.has(code) && NET_KEYS.has(code)) net.client.send({ t: "in", c: code, d: 1 });
         keys.add(code);
         return;
@@ -377,8 +469,11 @@ function ArenaPage() {
       if (!g) return;
 
       if (isFirstPress && (code === "Space" || code === "Enter") && g.phase === "match_over") {
+        if (isNet(g)) {
+          if (net?.role === "host") net.client.send({ t: "go" }); // 回到大廳後由房主再開一局
+          return;
+        }
         startNewMatch(g.mode, p1Pick, p2Pick, stageIdx, aiDiffId);
-        if (g.mode === "online") net?.client.send({ t: "rematch" });
         return;
       }
 
@@ -435,7 +530,7 @@ function ArenaPage() {
 
     const onKeyUp = (e: KeyboardEvent) => {
       const net = netRef.current;
-      if (gameRef.current?.mode === "online" && net?.role === "guest" && NET_KEYS.has(e.code)) {
+      if (isNet(gameRef.current) && net?.role === "guest" && NET_KEYS.has(e.code)) {
         net.client.send({ t: "in", c: e.code, d: 0 });
       }
       keys.delete(e.code);
@@ -443,17 +538,38 @@ function ArenaPage() {
 
     if (netRef.current) {
       // 房主：對手的按鍵 → 2P 的移動與出招
-      netRef.current.handleInput = (code: string, down: boolean) => {
+      netRef.current.handleInput = (slot: number, code: string, down: boolean, heldList?: string) => {
         const g = gameRef.current;
-        if (!g || g.mode !== "online") return;
-        if (!down) {
-          remoteKeys.delete(code);
+        if (!isNet(g)) return;
+        const set = rk(slot);
+        if (code === "HELD") {
+          // 對手定期送來「現在按住的移動鍵」：補回剛開局或網路抖動時漏掉的按下 / 放開
+          const want = new Set(String(heldList || "").split(",").filter(Boolean));
+          for (const mv of ["KeyA", "KeyD", "KeyW", "KeyS"]) want.has(mv) ? set.add(mv) : set.delete(mv);
           return;
         }
-        if (remoteKeys.has(code)) return;
-        remoteKeys.add(code);
+        if (!down) {
+          set.delete(code);
+          return;
+        }
+        if (set.has(code)) return;
+        set.add(code);
+        const me = slotFighter(g, slot);
         const kind = REMOTE_ATTACK[code];
-        if (kind && g.phase === "fight") triggerAttack(g, g.p2, g.p1, kind === "heavy" && remoteKeys.has("KeyS") ? "sweep" : kind);
+        if (me && kind && g.phase === "fight") {
+          triggerAttack(g, me, g.mode === "coop" ? g.p2 : g.p1, kind === "heavy" && set.has("KeyS") ? "sweep" : kind);
+        }
+      };
+      // 房主：有人斷線 → 那個角色倒下，不再接收按鍵
+      netRef.current.onDropped = (slot: number) => {
+        const g = gameRef.current;
+        const f = g && slotFighter(g, slot);
+        rk(slot).clear();
+        if (f && f.state !== "ko") {
+          f.hp = 0;
+          f.state = "ko";
+          if (g.mode === "coop") checkCoopWipe(g);
+        }
       };
       // 對手：套用房主傳來的畫面狀態
       netRef.current.onSnapshot = (s: any) => applySnapshot(gameRef.current, s);
@@ -514,7 +630,8 @@ function ArenaPage() {
         sfx.play("hadouken");
         addFloatingText(g, attacker.x, attacker.y - 95, attacker.cfg.specialName, attacker.cfg.color, 25);
         g.projectiles.push({
-          owner: attacker === g.p1 ? "p1" : "p2",
+          owner: attacker === g.p2 ? "p2" : "p1",
+          by: attacker.slot || 0,
           style: FX.projStyleFor(attacker),
           x: attacker.x + attacker.facing * 48,
           y: attacker.y - 52,
@@ -548,7 +665,8 @@ function ArenaPage() {
         attacker.stateTimer = 40;
         for (let i = 0; i < 3; i++) {
           g.projectiles.push({
-            owner: attacker === g.p1 ? "p1" : "p2",
+            owner: attacker === g.p2 ? "p2" : "p1",
+          by: attacker.slot || 0,
             style: FX.projStyleFor(attacker),
             x: attacker.x + attacker.facing * (52 - i * 28),
             y: attacker.y - 54,
@@ -743,10 +861,10 @@ function ArenaPage() {
       if (f.isAI) {
         return f.state === "walk" && Math.sign(f.vx) === -f.facing;
       }
-      const isP1 = f === gameRef.current?.p1;
-      const holdLeft = isP1 ? keys.has("KeyA") : keys.has("ArrowLeft");
-      const holdRight = isP1 ? keys.has("KeyD") : keys.has("ArrowRight");
-      const holdDown = isP1 ? keys.has("KeyS") : keys.has("ArrowDown");
+      const g = gameRef.current;
+      const holdLeft = held(g, f, "L");
+      const holdRight = held(g, f, "R");
+      const holdDown = held(g, f, "D");
       if (opponent.x >= f.x && holdLeft) return true;
       if (opponent.x < f.x && holdRight) return true;
       if (holdDown && f.state === "crouch") return true;
@@ -774,8 +892,7 @@ function ArenaPage() {
         (!isLowAttack || defender.state === "crouch");
 
       if (canBlock) {
-        const chipDamage = Math.max(2, Math.round(rawDamage * 0.15));
-        defender.hp = Math.max(1, defender.hp - chipDamage);
+        // 格擋成功：完全不扣血（只有不可格擋的招式與 Boss 機關會打穿防禦）
         defender.state = "block";
         defender.stateTimer = 12;
         defender.vx = -defender.facing * (knockbackX * 0.55);
@@ -808,7 +925,13 @@ function ArenaPage() {
         24
       );
 
+      if (g.coop && defender === g.p2) g.coop.damage[attacker.slot || 0] += finalDamage;
+
       if (defender.hp <= 0) {
+        if (g.mode === "coop") {
+          coopDown(g, defender);
+          return;
+        }
         triggerRoundKO(g, attacker, defender);
         return;
       }
@@ -863,6 +986,49 @@ function ArenaPage() {
       }
     }
 
+    function coopTeam(g: any) {
+      return [g.p1, ...(g.allies || [])];
+    }
+
+    /** Boss 要打的目標：最近的、還站著的隊員 */
+    function coopTarget(g: any) {
+      const alive = coopTeam(g).filter((f: any) => f.state !== "ko" && f.hp > 0);
+      if (!alive.length) return g.p1;
+      return alive.reduce((a: any, b: any) => (Math.abs(b.x - g.p2.x) < Math.abs(a.x - g.p2.x) ? b : a));
+    }
+
+    function coopDown(g: any, f: any) {
+      f.hp = 0;
+      f.state = "ko";
+      f.vx = -f.facing * 8;
+      f.vy = -9;
+      g.screenShake = 12;
+      sfx.play("ko");
+      FX.addFx(g, { type: "ring", x: f.x, y: f.y - 50, r0: 10, r1: 160, color: "#ffffff", life: 26, lw: 8 });
+      if (f === g.p2) coopEnd(g, "kill");
+      else checkCoopWipe(g);
+    }
+
+    function checkCoopWipe(g: any) {
+      if (coopTeam(g).every((f: any) => f.state === "ko" || f.hp <= 0)) coopEnd(g, "wipe");
+    }
+
+    function coopEnd(g: any, reason: "kill" | "wipe" | "time") {
+      if (!g.coop || g.coop.ended) return;
+      g.coop.ended = true;
+      g.phase = "match_over";
+      const total = g.coop.damage.reduce((a: number, b: number) => a + b, 0);
+      g.bannerText = reason === "kill" ? "BOSS DOWN !!" : reason === "wipe" ? "全隊倒下…" : "TIME UP";
+      g.subBannerText = `全隊傷害 ${total.toLocaleString()} · 房主按 [SPACE] 或面板的「開始」再打一場`;
+      sfx.play(reason === "kill" ? "super" : "ko");
+      const result = { damage: g.coop.damage, killed: reason === "kill", reason, total };
+      const net = netRef.current;
+      if (net?.role === "host") {
+        net.client.send({ t: "end", result });
+        net.onCoopEnd?.(result);
+      }
+    }
+
     function triggerRoundKO(g: any, winner: any, loser: any) {
       loser.hp = 0;
       loser.state = "ko";
@@ -908,13 +1074,13 @@ function ArenaPage() {
         const ctx = canvas.getContext("2d");
         if (ctx) {
           const net = netRef.current;
-          const guest = g.mode === "online" && net?.role === "guest";
+          const guest = isNet(g) && net?.role === "guest";
           let substeps = 0;
           while (accumulator >= STEP_MS && substeps < 3) {
             if (guest) guestTick(g);
             else {
               updateGame(g);
-              if (g.mode === "online" && g.frameCounter % 2 === 0) sendSnapshot(g); // 每秒約 24 次
+              if (isNet(g)) sendSnapshot(g); // 每個邏輯步都送（約每秒 47 次）
             }
             accumulator -= STEP_MS;
             substeps++;
@@ -933,6 +1099,8 @@ function ArenaPage() {
           phase: g.phase, bannerText: g.bannerText, subBannerText: g.subBannerText, timer: g.timer, round: g.round,
           p1Wins: g.p1Wins, p2Wins: g.p2Wins, frameCounter: g.frameCounter, superFlash: g.superFlash,
           p1: netFields(g.p1), p2: netFields(g.p2),
+          al: (g.allies || []).map(netFields),
+          cp: g.coop ? { ticks: g.coop.ticks, damage: g.coop.damage, ended: !!g.coop.ended } : null,
           proj: g.projectiles.map(netFields),
           ft: g.floatingTexts.map(netFields),
         },
@@ -941,15 +1109,24 @@ function ArenaPage() {
 
     /** 對手這邊：用狀態變化重建出招特效、命中火花與音效 */
     function applySnapshot(g: any, s: any) {
-      if (!g || !s || g.mode !== "online") return;
+      if (!isNet(g) || !s) return;
       const prevPhase = g.phase;
-      for (const [f, n] of [[g.p1, s.p1], [g.p2, s.p2]] as any[]) {
+      const pairs = [[g.p1, s.p1], [g.p2, s.p2], ...(g.allies || []).map((a: any, i: number) => [a, s.al?.[i]])];
+      for (const [f, n] of pairs as any[]) {
         if (!n) continue;
         const other = f === g.p1 ? g.p2 : g.p1;
         const started = n.state === "attack" && (f.state !== "attack" || f.attackType !== n.attackType || n.stateTimer > f.stateTimer);
         const blocked = n.state === "block" && f.state !== "block";
         const hpDrop = f.hp - n.hp;
-        Object.assign(f, n);
+        const { x, y, ...rest } = n;
+        Object.assign(f, rest);
+        // 位置：差太多直接跳過去，否則由 guestTick 慢慢靠過去（不會一格一格跳）
+        if (f._tx === undefined || Math.abs(x - f.x) > 90 || Math.abs(y - f.y) > 90) {
+          f.x = x;
+          f.y = y;
+        }
+        f._tx = x;
+        f._ty = y;
         if (started && n.attackType) {
           sfx.play(n.attackType);
           FX.onAttackStart(g, f, n.attackType, { name: f.cfg.superName, side: f === g.p1 ? "left" : "right" });
@@ -962,12 +1139,35 @@ function ArenaPage() {
       g.projectiles = s.proj || [];
       g.floatingTexts = s.ft || [];
       for (const k of ["phase", "bannerText", "subBannerText", "timer", "round", "p1Wins", "p2Wins", "frameCounter", "superFlash"]) g[k] = s[k];
+      if (s.cp && g.coop) Object.assign(g.coop, s.cp);
       if (s.phase === "ko" && prevPhase !== "ko") sfx.play("ko");
     }
 
     /** 對手這邊每個邏輯步只更新特效（戰鬥由房主模擬） */
+    let heldSync = 0;
     function guestTick(g: any) {
       if (g.screenShake > 0) g.screenShake = Math.max(0, g.screenShake - 0.8);
+      if (++heldSync % 24 === 0) {
+        // 每 0.5 秒同步一次按住的移動鍵（攻擊鍵不重送，避免重複出招）
+        const h = ["KeyA", "KeyD", "KeyW", "KeyS"].filter((k) => keys.has(k)).join(",");
+        netRef.current?.client.send({ t: "in", c: "HELD", d: 1, h });
+      }
+      // 兩次快照之間：照速度與重力推算位置，再平滑靠向房主給的位置
+      for (const f of [g.p1, g.p2, ...(g.allies || [])]) {
+        if (f._tx === undefined) continue;
+        f._tx = Math.max(55, Math.min(845, f._tx + (f.vx || 0)));
+        if (f._ty < FLOOR_Y || f.vy < 0) {
+          f._ty = Math.min(FLOOR_Y, f._ty + (f.vy || 0));
+          f.vy = (f.vy || 0) + GRAVITY;
+        }
+        f.x += (f._tx - f.x) * 0.5;
+        f.y += (f._ty - f.y) * 0.5;
+      }
+      for (const proj of g.projectiles) proj.x += proj.vx || 0;
+      for (const a of g.allies || []) {
+        FX.trackAfterimages(g, a);
+        FX.emitWeaponParticles(g, a);
+      }
       FX.updateParticles(g);
       FX.updateFx(g);
       FX.trackAfterimages(g, g.p1);
@@ -1023,7 +1223,7 @@ function ArenaPage() {
             const winSide = g.p1Wins >= 2 ? "1P" : g.mode === "cpu" ? "CPU" : "2P";
             g.winner = matchWinner;
             g.bannerText = `${g.labels ? (g.p1Wins >= 2 ? g.labels.p1 : g.labels.p2) : winSide} · ${matchWinner.cfg.name} WINS!`;
-            g.subBannerText = g.mode === "online" ? "房主按 [SPACE] 再戰一場" : "按 [SPACE] 再戰一場，或於上方自由切換角色！";
+            g.subBannerText = g.mode === "online" ? "回到大廳：可以換角色，房主按 [SPACE] 或「開始」再戰" : "按 [SPACE] 再戰一場，或於上方自由切換角色！";
             if (g.mode === "online") netRef.current?.client.send({ t: "end", winner: g.p1Wins >= 2 ? "host" : "guest" });
             setMatchStateText(`勝負揭曉：${winSide} (${matchWinner.cfg.name}) 獲勝！`);
           } else {
@@ -1038,8 +1238,15 @@ function ArenaPage() {
         return;
       }
 
-      // Slowed round timer: 1 tick per 75 logic steps (~1.6 real seconds)
-      if (g.frameCounter % 75 === 0 && g.timer > 0) {
+      if (g.mode === "coop") {
+        g.coop.ticks--;
+        g.timer = Math.max(0, Math.ceil((g.coop.ticks * 21) / 1000));
+        if (g.coop.ticks <= 0) {
+          coopEnd(g, "time");
+          return;
+        }
+      } else if (g.frameCounter % 75 === 0 && g.timer > 0) {
+        // Slowed round timer: 1 tick per 75 logic steps (~1.6 real seconds)
         g.timer--;
         if (g.timer === 0) {
           const p1Ratio = g.p1.hp / g.p1.hpMax;
@@ -1063,19 +1270,14 @@ function ArenaPage() {
       );
 
       // 2P Movement: Strictly Right-Side (Arrow Keys) or AI
-      if (g.mode === "cpu") {
-        updateAI(g, g.p2, g.p1);
+      if (g.mode === "cpu" || g.mode === "coop") {
+        updateAI(g, g.p2, g.mode === "coop" ? coopTarget(g) : g.p1);
       } else {
-        const online = g.mode === "online";
-        updateFighterControl(
-          g,
-          g.p2,
-          g.p1,
-          online ? remoteKeys.has("KeyA") : keys.has("ArrowLeft"),
-          online ? remoteKeys.has("KeyD") : keys.has("ArrowRight"),
-          online ? remoteKeys.has("KeyW") : keys.has("ArrowUp"),
-          online ? remoteKeys.has("KeyS") : keys.has("ArrowDown")
-        );
+        updateFighterControl(g, g.p2, g.p1, held(g, g.p2, "L"), held(g, g.p2, "R"), held(g, g.p2, "U"), held(g, g.p2, "D"));
+      }
+      for (const a of g.allies || []) {
+        updateFighterControl(g, a, g.p2, held(g, a, "L"), held(g, a, "R"), held(g, a, "U"), held(g, a, "D"));
+        if (Math.abs(a.x - g.p2.x) < 44 && Math.abs(a.y - g.p2.y) < 70) a.x += a.x <= g.p2.x ? -3 : 3;
       }
 
       const minDist = 48;
@@ -1092,7 +1294,14 @@ function ArenaPage() {
       }
 
       checkMeleeHit(g, g.p1, g.p2);
-      checkMeleeHit(g, g.p2, g.p1);
+      if (g.mode === "coop") {
+        for (const a of g.allies) checkMeleeHit(g, a, g.p2);
+        for (const t of coopTeam(g)) if (t.state !== "ko") checkMeleeHit(g, g.p2, t);
+      } else checkMeleeHit(g, g.p2, g.p1);
+      for (const a of g.allies || []) {
+        FX.trackAfterimages(g, a);
+        FX.emitWeaponParticles(g, a);
+      }
 
       FX.trackAfterimages(g, g.p1);
       FX.trackAfterimages(g, g.p2);
@@ -1103,8 +1312,12 @@ function ArenaPage() {
         proj.x += proj.vx;
         FX.emitProjectileTrail(g, proj);
 
-        const target = proj.owner === "p1" ? g.p2 : g.p1;
-        const attacker = proj.owner === "p1" ? g.p1 : g.p2;
+        const attacker = proj.owner === "p1" ? (proj.by ? slotFighter(g, proj.by) || g.p1 : g.p1) : g.p2;
+        let target = proj.owner === "p1" ? g.p2 : g.p1;
+        if (g.mode === "coop" && proj.owner === "p2") {
+          // Boss 的飛行道具打第一個碰到的隊員
+          target = coopTeam(g).find((t: any) => t.state !== "ko" && Math.abs(proj.x - t.x) < proj.radius + 24) || g.p1;
+        }
 
         if (
           proj.hitsLeft > 0 &&
@@ -1155,10 +1368,16 @@ function ArenaPage() {
       FX.drawFx(ctx, g, "back", frame);
 
       // 出招的一方畫在前面
-      const order = g.p2.state === "attack" && g.p1.state !== "attack" ? [g.p1, g.p2] : [g.p2, g.p1];
+      const order = [...(g.allies || []), ...(g.p2.state === "attack" && g.p1.state !== "attack" ? [g.p1, g.p2] : [g.p2, g.p1])];
       for (const f of order) {
         if (f.energy >= 100) FX.drawAura(ctx, f, frame);
         FX.drawFighter(ctx, f, frame);
+      }
+      if (g.coop) {
+        for (const f of coopTeam(g)) {
+          const me = f.slot === g.coop.you;
+          FX.outlinedText(ctx, `${g.coop.names[f.slot] || ""}${me ? "（你）" : ""}`, f.x, f.y - 138, 11, me ? "#ffd60a" : "#cfeedd", "#000", "center", 3);
+        }
       }
 
       for (const proj of g.projectiles) FX.drawProjectile(ctx, proj, frame);
@@ -1190,6 +1409,19 @@ function ArenaPage() {
       FX.outlinedText(ctx, `${g.labels?.p2 || (g.mode === "cpu" ? "CPU" : "2P")}: ${g.p2.cfg.name}`, p2X + barW, topY + barH + 18, 13, "#7de8ff", "#000", "right", 3);
       FX.outlinedText(ctx, "★".repeat(g.p1Wins) + "☆".repeat(Math.max(0, 2 - g.p1Wins)), p1X + barW - 4, topY + barH + 18, 15, "#ffd60a", "#000", "right", 3);
       FX.outlinedText(ctx, "★".repeat(g.p2Wins) + "☆".repeat(Math.max(0, 2 - g.p2Wins)), p2X + 4, topY + barH + 18, 15, "#ffd60a", "#000", "left", 3);
+
+      if (g.coop) {
+        (g.allies || []).forEach((a: any, i: number) => {
+          const y = topY + barH + 30 + i * 15;
+          FX.outlinedText(ctx, g.coop.names[a.slot] || "", p1X, y + 8, 10, "#cfeedd", "#000", "left", 3);
+          ctx.fillStyle = "#3a0f1c";
+          ctx.fillRect(p1X + 96, y, 150, 8);
+          ctx.fillStyle = a.state === "ko" ? "#555" : "#7dffb6";
+          ctx.fillRect(p1X + 96, y, 150 * Math.max(0, a.hp / a.hpMax), 8);
+        });
+        const total = g.coop.damage.reduce((x: number, y: number) => x + y, 0);
+        FX.outlinedText(ctx, `全隊傷害 ${total.toLocaleString()}`, W / 2, topY + 62, 14, "#ffd60a", "#000", "center", 4);
+      }
 
       if (g.p1.comboCount >= 2 && g.p1.comboTimer > 0) FX.drawCombo(ctx, 24, 128, g.p1.comboCount, "left", "#ffd60a", g.p1.comboTimer - 46);
       if (g.p2.comboCount >= 2 && g.p2.comboTimer > 0) FX.drawCombo(ctx, W - 24, 128, g.p2.comboCount, "right", "#7de8ff", g.p2.comboTimer - 46);
@@ -1234,8 +1466,25 @@ function ArenaPage() {
       }
     }
 
+    let worker: Worker | null = null;
+    if (netRef.current?.role === "host" && (mode === "online" || mode === "coop") && typeof Worker !== "undefined") {
+      try {
+        const url = URL.createObjectURL(new Blob(["setInterval(() => postMessage(0), 21)"], { type: "text/javascript" }));
+        worker = new Worker(url);
+        URL.revokeObjectURL(url);
+        worker.onmessage = () => {
+          const g = gameRef.current;
+          // requestAnimationFrame 正常時由它負責；分頁在背景、視窗被蓋住或被瀏覽器節流時，改由這個時鐘推進
+          if (!isNet(g) || performance.now() - lastTime < 100) return;
+          updateGame(g);
+          sendSnapshot(g);
+        };
+      } catch {}
+    }
+
     animId = requestAnimationFrame(step);
     return () => {
+      worker?.terminate();
       cancelAnimationFrame(animId);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
@@ -1328,8 +1577,18 @@ function ArenaPage() {
           </div>
         </div>
 
-        {(showOnline || online) && (
-          <DuelPanel fighter={p1Pick} stage={stageIdx} netRef={netRef} onStart={startOnline} onStop={stopOnline} />
+        {(showOnline || online || coopMode) && (
+          <DuelPanel
+            kind={coopMode ? "coop" : "duel"}
+            fighters={FIGHTERS}
+            stages={STAGES}
+            fighter={p1Pick}
+            stage={stageIdx}
+            netRef={netRef}
+            onStart={startOnline}
+            onStop={stopOnline}
+            onCoopEnd={finishCoop}
+          />
         )}
 
         {/* Left 1P & Right 2P / CPU Character Pickers */}

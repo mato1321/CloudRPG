@@ -91,9 +91,15 @@ function RaidPage() {
             ) : !loading && !profile ? (
               <NeedCharacter />
             ) : (
-              <button onClick={() => setFighting(true)} className="crpg-panel px-6 py-2 text-[#ff4d6d] crpg-glow-red border-[#ff4d6d]/60 font-bold">
-                [ 參戰（45 秒） ]
-              </button>
+              <>
+                <button onClick={() => setFighting(true)} className="crpg-panel px-6 py-2 text-[#ff4d6d] crpg-glow-red border-[#ff4d6d]/60 font-bold">
+                  [ 參戰（45 秒） ]
+                </button>
+                {/* 組隊共鬥在自由對戰頁的連線引擎裡進行（同一個畫面 2–4 人） */}
+                <a href="/arena?coop=1" className="crpg-panel px-6 py-2 text-[#ffd60a] crpg-glow-yellow border-[#ffd60a]/60 font-bold">
+                  [ 組隊討伐（2–4 人同畫面） ]
+                </a>
+              </>
             )}
             {boss?.mine && <span className="text-[12px] text-[#cfeedd]">你的累積傷害：<span className="text-[#ffd60a]">{boss.mine.damage.toLocaleString()}</span>（{boss.mine.hits} 場）</span>}
             {boss?.unclaimed > 0 && (
